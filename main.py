@@ -54,8 +54,9 @@ ser.write(command)
 
 start_sign = ser.read(2)
 response = ser.read(4)
-res_mode = response[3] >> 6
 typecode = ser.read(1)
+
+res_mode = response[3] >> 6
 
 if start_sign == YDLIDAR_START_SIGN:
     print("Retrieved response successfully.")
@@ -74,8 +75,20 @@ if start_sign == YDLIDAR_START_SIGN:
         end_angle = ser.read(2)
         checkcode = ser.read(2)
 
-        print(header, status, sample_quantity)
-        print(start_angle, end_angle, checkcode)
+        status = int.from_bytes(status, 'little')
+        quantity = int.from_bytes(sample_quantity, 'little')
+        fsa = int.from_bytes(start_angle, 'little')
+        lsa = int.from_bytes(end_angle, 'little')
+
+        print("Packet header sanity check : ", header == bytearray([0x55, 0xAA]))
+        print("Freq : ", ((status & 0b11111110) >> 1) / 10)
+        print("Current packet type : ", status & 0b1)
+        print("Sample quantity : ", quantity)
+
+        print("Starting angle :", (fsa >> 1) / 64)
+        print("End angle : ", (lsa >> 1) / 64)
+        print("Checkcode : ", checkcode)
+
         while True:
             sample_data = ser.read(3)
             print(sample_data)
