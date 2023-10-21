@@ -50,6 +50,7 @@ ser.write(command)
 
 start_sign = ser.read(2)
 response = ser.read(4)
+res_mode = response[3] >> 6
 typecode = ser.read(1)
 
 if start_sign == YDLIDAR_START_SIGN:
@@ -59,6 +60,7 @@ if start_sign == YDLIDAR_START_SIGN:
 
     print("Response length : ", res_length)
     print("Response type : ", res_type)
+    print("Response mode : ", res_mode)
     
     payload = ser.read(res_length)
     print("Payload: ", payload)
