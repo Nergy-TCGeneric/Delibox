@@ -20,6 +20,10 @@ GET_CURRENT_RANGE_FREQ = 0xD1
 POWER_DOWN_PROTECT = 0xD9
 SOFT_RESTART = 0x40
 
+# Response mode constants.
+CONTINUOUS = 0x1
+SINGLE = 0x0
+
 port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
 
@@ -61,8 +65,24 @@ if start_sign == YDLIDAR_START_SIGN:
     print("Response length : ", res_length)
     print("Response type : ", res_type)
     print("Response mode : ", res_mode)
-    
-    payload = ser.read(res_length)
-    print("Payload: ", payload)
+
+    if res_mode == CONTINUOUS:
+        header = ser.read(2)
+        status = ser.read()
+        sample_quantity = ser.read()
+        start_angle = ser.read(2)
+        end_angle = ser.read(2)
+        checkcode = ser.read(2)
+
+        print(header, status, sample_quantity)
+        print(start_angle, end_angle, checkcode)
+        while True:
+            sample_data = ser.read(3)
+            print(sample_data)
+    elif res_mode == SINGLE:
+        payload = ser.read(res_length)
+        print("Payload: ", payload)
+    else:
+        print("Unknown response mode. Prehaps the packet is corrupted?")
 else:
     print("Failed to retrieve the response.")
