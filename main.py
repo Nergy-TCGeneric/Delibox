@@ -23,7 +23,7 @@ SOFT_RESTART = 0x40
 port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
 
-ser = serial.Serial(port, 512000)
+ser = serial.Serial(port, 512000, timeout=2, write_timeout=2)
 command = bytearray([0xA5, 0x00]) 
 
 if cmd_query == "start":
