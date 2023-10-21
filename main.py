@@ -10,24 +10,24 @@ port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
 
 ser = serial.Serial(port, 512000)
-command = bytearray() 
+command = bytearray([0xA5, 0x00]) 
 
 if cmd_query == "start":
-    command = bytearray([0xA5, 0x60])
+    command[1] = 0x60
 elif cmd_query == "stop":
-    command = bytearray([0xA5, 0x65])
+    command[1] = 0x65
 elif cmd_query == "dinfo":
-    command = bytearray([0xA5, 0x90])
+    command[1] = 0x90
 elif cmd_query == "dhealth":
-    command = bytearray([0xA5, 0x92])
+    command[1] = 0x92
 elif cmd_query == "scanfreq":
-    command = bytearray([0xA5, 0x0D])
+    command[1] = 0x0D
 elif cmd_query == "rangfreq":
-    command = bytearray([0xA5, 0xD1])
+    command[1] = 0xD1
 elif cmd_query == "pprotect":
-    command = bytearray([0xA5, 0xD9])
+    command[1] = 0xD9
 elif cmd_query == "reset":
-    command = bytearray([0xA5, 0x40])
+    command[1] = 0x40
 else:
     print("Invalid command given. exiting")
     exit()
