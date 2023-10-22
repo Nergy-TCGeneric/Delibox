@@ -17,7 +17,7 @@ INCREASE_SCAN_FREQ_10X = 0x0B
 DECREASE_SCAN_FREQ_10X = 0x0C
 GET_CURRENT_SCAN_FREQ = 0x0D
 GET_CURRENT_RANGE_FREQ = 0xD1
-POWER_DOWN_PROTECT = 0xD9
+USE_HEARTBEAT_PROTOCOL = 0xD9
 SOFT_RESTART = 0x40
 
 # Response mode constants.
@@ -43,7 +43,7 @@ elif cmd_query == "scanfreq":
 elif cmd_query == "rangfreq":
     command[1] = GET_CURRENT_RANGE_FREQ
 elif cmd_query == "pprotect":
-    command[1] = POWER_DOWN_PROTECT
+    command[1] = USE_HEARTBEAT_PROTOCOL
 elif cmd_query == "reset":
     command[1] = SOFT_RESTART
 else:
