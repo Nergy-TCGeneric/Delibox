@@ -24,6 +24,9 @@ SOFT_RESTART = 0x40
 CONTINUOUS = 0x1
 SINGLE = 0x0
 
+# Byte sequence constants.
+SCAN_HEADER = (bytes([0xAA]), bytes([0x55]))
+
 port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
 
@@ -59,7 +62,6 @@ typecode = ser.read()
 res_mode = response[3] >> 6
 
 if start_sign == YDLIDAR_START_SIGN:
-    ser.read() # This is necessary to strip one surplus zero-padded byte
 
     print("Retrieved response successfully.")
     res_length = struct.unpack('<4B', response)[0]
@@ -70,23 +72,32 @@ if start_sign == YDLIDAR_START_SIGN:
     print("Response mode : ", res_mode)
 
     if res_mode == CONTINUOUS:
+        header_count = 0
+        total_sample_count = 0
+
         while True:
-            header = ser.read(2)
+            data = ser.read()
+            if data == SCAN_HEADER[header_count]:
+                header_count = header_count + 1
+            if header_count < 2:
+                continue
+
             status = ser.read()
             sample_quantity = ser.read()
             start_angle = ser.read(2)
             end_angle = ser.read(2)
             checkcode = ser.read(2)
 
-            print(header.hex(), status.hex(), sample_quantity.hex())
-            print(start_angle.hex(), end_angle.hex(), checkcode.hex())
-
             status = int.from_bytes(status, 'little')
             quantity = int.from_bytes(sample_quantity, 'little')
             fsa = int.from_bytes(start_angle, 'little')
             lsa = int.from_bytes(end_angle, 'little')
 
-            print("Packet header sanity check : ", header == bytearray([0xAA, 0x55]))
+            if status & 0b1 == 1:
+                print("Total sample count : ", total_sample_count)
+                total_sample_count = 0
+
+            print("New packet received")
             print("Freq : ", ((status & 0b11111110) >> 1) / 10)
             print("Current packet type : ", status & 0b1)
             print("Sample quantity : ", quantity)
@@ -97,7 +108,9 @@ if start_sign == YDLIDAR_START_SIGN:
 
             for i in range(0, quantity):
                 sample_data = ser.read(3)
-                print(sample_data.hex())
+
+            total_sample_count = total_sample_count + quantity
+            header_count = 0
 
     elif res_mode == SINGLE:
         payload = ser.read(res_length)
