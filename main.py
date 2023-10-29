@@ -2,6 +2,12 @@ import math
 import serial
 import struct
 
+import matplotlib.pyplot as plt
+
+# Minimum distance constant.
+MINIMUM_DISTANCE = 160 # in mm.
+
+# YDLidar protocol category constants.
 YDLIDAR_START_SIGN = bytearray([0xA5, 0x5A])
 SCANNING = 0x81
 HEALTH_STATUS = 0x06
@@ -25,8 +31,22 @@ SOFT_RESTART = 0x40
 CONTINUOUS = 0x1
 SINGLE = 0x0
 
+# Scan data category constants.
+CLOUD_DATA = 0
+START_DATA = 1
+
 # Byte sequence constants.
 SCAN_HEADER = (bytes([0xAA]), bytes([0x55]))
+
+
+angles = []
+distances = []
+intensities = []
+
+fig = plt.figure()
+lidar_polar = plt.subplot(polar=True)
+lidar_polar.set_title("G2 Scan result")
+lidar_polar.grid(True)
 
 port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
@@ -74,7 +94,6 @@ if start_sign == YDLIDAR_START_SIGN:
 
     if res_mode == CONTINUOUS:
         header_count = 0
-        total_sample_count = 0
 
         while True:
             data = ser.read()
@@ -94,35 +113,44 @@ if start_sign == YDLIDAR_START_SIGN:
             fsa = int.from_bytes(fsa_angle, 'little')
             lsa = int.from_bytes(lsa_angle, 'little')
 
-            if status & 0b1 == 1:
-                print("Total sample count : ", total_sample_count)
-                total_sample_count = 0
-
-            print("New packet received")
-            print("Freq : ", ((status & 0b11111110) >> 1) / 10)
-            print("Current packet type : ", status & 0b1)
-            print("Sample quantity : ", quantity)
-
+            packet_type = status & 0b1
+            frequency = ((status & 0b11111110) >> 1) / 10
             starting_angle = (fsa >> 1) / 64
             ending_angle = (lsa >> 1) / 64
             angle_diff = (ending_angle + 360) - starting_angle if ending_angle - starting_angle < 0 else ending_angle - starting_angle
 
-            print("Starting angle :", starting_angle)
-            print("End angle : ", ending_angle)
-            print("Checkcode : ", checkcode)
-
             for i in range(0, quantity):
                 sample_data = ser.read(3)
-                intensity = sample_data[0]
-                intensity = intensity + (sample_data[1] & 0b11) * 256
-                distance = (sample_data[2] << 6) + (sample_data[1] >> 2)
+                sample_data = int.from_bytes(sample_data, 'little')
+
+                first_byte = sample_data & 0b11111111
+                second_byte = (sample_data >> 8) & 0b11111111
+                third_byte = (sample_data >> 16) & 0b11111111
+
+                intensity = first_byte + (second_byte & 0b11) * 256
+                distance = ((third_byte << 6) + (second_byte >> 2)) / 1000
+
                 angle = angle_diff / (quantity + 1) * (i + 1) + starting_angle
                 correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
                 final_angle = math.fmod(angle + correcting_angle, 360)
 
-                print(i + 1, intensity, distance, final_angle)
+                angles.append(final_angle)
+                distances.append(distance)
+                intensities.append(intensity)
 
-            total_sample_count = total_sample_count + quantity
+            if packet_type == START_DATA:
+                print(angles)
+                print()
+                print(distances)
+                lidar_polar.scatter(angles, distances)
+                plt.draw()
+                plt.pause(0.016)
+                lidar_polar.clear()
+
+                angles.clear()
+                distances.clear()
+                intensities.clear()
+
             header_count = 0
 
     elif res_mode == SINGLE:
@@ -132,3 +160,5 @@ if start_sign == YDLIDAR_START_SIGN:
         print("Unknown response mode. Prehaps the packet is corrupted?")
 else:
     print("Failed to retrieve the response.")
+
+plt.close()
