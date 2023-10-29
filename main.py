@@ -5,7 +5,7 @@ import struct
 import matplotlib.pyplot as plt
 
 # Minimum distance constant.
-MINIMUM_DISTANCE = 160 # in mm.
+MINIMUM_DISTANCE = 0.160
 
 # YDLidar protocol category constants.
 YDLIDAR_START_SIGN = bytearray([0xA5, 0x5A])
@@ -38,15 +38,12 @@ START_DATA = 1
 # Byte sequence constants.
 SCAN_HEADER = (bytes([0xAA]), bytes([0x55]))
 
-
-angles = []
-distances = []
-intensities = []
+# In radian.
+might_collide_angles = []
+might_collide_dist = []
 
 fig = plt.figure()
-lidar_polar = plt.subplot(polar=True)
-lidar_polar.set_title("G2 Scan result")
-lidar_polar.grid(True)
+ax = fig.add_subplot(projection='polar')
 
 port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
@@ -134,22 +131,18 @@ if start_sign == YDLIDAR_START_SIGN:
                 correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
                 final_angle = math.fmod(angle + correcting_angle, 360)
 
-                angles.append(final_angle)
-                distances.append(distance)
-                intensities.append(intensity)
+                if distance > 0 and distance < MINIMUM_DISTANCE:
+                    final_radian = math.radians(final_angle)
+                    might_collide_dist.append(distance)
+                    might_collide_angles.append(final_radian)
 
             if packet_type == START_DATA:
-                print(angles)
-                print()
-                print(distances)
-                lidar_polar.scatter(angles, distances)
+                ax.scatter(might_collide_angles, might_collide_dist)
                 plt.draw()
                 plt.pause(0.016)
-                lidar_polar.clear()
-
-                angles.clear()
-                distances.clear()
-                intensities.clear()
+                ax.clear()
+                might_collide_dist.clear()
+                might_collide_angles.clear()
 
             header_count = 0
 
@@ -160,5 +153,3 @@ if start_sign == YDLIDAR_START_SIGN:
         print("Unknown response mode. Prehaps the packet is corrupted?")
 else:
     print("Failed to retrieve the response.")
-
-plt.close()
