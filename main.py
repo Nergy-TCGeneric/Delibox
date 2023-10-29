@@ -1,3 +1,4 @@
+import math
 import serial
 import struct
 
@@ -84,14 +85,14 @@ if start_sign == YDLIDAR_START_SIGN:
 
             status = ser.read()
             sample_quantity = ser.read()
-            start_angle = ser.read(2)
-            end_angle = ser.read(2)
+            fsa_angle = ser.read(2)
+            lsa_angle = ser.read(2)
             checkcode = ser.read(2)
 
             status = int.from_bytes(status, 'little')
             quantity = int.from_bytes(sample_quantity, 'little')
-            fsa = int.from_bytes(start_angle, 'little')
-            lsa = int.from_bytes(end_angle, 'little')
+            fsa = int.from_bytes(fsa_angle, 'little')
+            lsa = int.from_bytes(lsa_angle, 'little')
 
             if status & 0b1 == 1:
                 print("Total sample count : ", total_sample_count)
@@ -102,12 +103,24 @@ if start_sign == YDLIDAR_START_SIGN:
             print("Current packet type : ", status & 0b1)
             print("Sample quantity : ", quantity)
 
-            print("Starting angle :", (fsa >> 1) / 64)
-            print("End angle : ", (lsa >> 1) / 64)
+            starting_angle = (fsa >> 1) / 64
+            ending_angle = (lsa >> 1) / 64
+            angle_diff = (ending_angle + 360) - starting_angle if ending_angle - starting_angle < 0 else ending_angle - starting_angle
+
+            print("Starting angle :", starting_angle)
+            print("End angle : ", ending_angle)
             print("Checkcode : ", checkcode)
 
             for i in range(0, quantity):
                 sample_data = ser.read(3)
+                intensity = sample_data[0]
+                intensity = intensity + (sample_data[1] & 0b11) * 256
+                distance = (sample_data[2] << 6) + (sample_data[1] >> 2)
+                angle = angle_diff / (quantity + 1) * (i + 1) + starting_angle
+                correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
+                final_angle = math.fmod(angle + correcting_angle, 360)
+
+                print(i + 1, intensity, distance, final_angle)
 
             total_sample_count = total_sample_count + quantity
             header_count = 0
