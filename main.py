@@ -38,13 +38,6 @@ START_DATA = 1
 # Byte sequence constants.
 SCAN_HEADER = (bytes([0xAA]), bytes([0x55]))
 
-# In radian.
-might_collide_angles = []
-might_collide_dist = []
-
-fig = plt.figure()
-ax = fig.add_subplot(projection='polar')
-
 port = input("Enter the port: ")
 cmd_query = input("Enter the command: ")
 
@@ -91,6 +84,8 @@ if start_sign == YDLIDAR_START_SIGN:
 
     if res_mode == CONTINUOUS:
         header_count = 0
+        might_collide_angles = []
+        might_collide_dist = []
 
         while True:
             data = ser.read()
@@ -132,15 +127,10 @@ if start_sign == YDLIDAR_START_SIGN:
                 final_angle = math.fmod(angle + correcting_angle, 360)
 
                 if distance > 0 and distance < MINIMUM_DISTANCE:
-                    final_radian = math.radians(final_angle)
                     might_collide_dist.append(distance)
-                    might_collide_angles.append(final_radian)
+                    might_collide_angles.append(final_angle)
 
             if packet_type == START_DATA:
-                ax.scatter(might_collide_angles, might_collide_dist)
-                plt.draw()
-                plt.pause(0.016)
-                ax.clear()
                 might_collide_dist.clear()
                 might_collide_angles.clear()
 
