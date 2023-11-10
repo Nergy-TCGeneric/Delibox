@@ -1,6 +1,8 @@
 import math
 import serial
 import struct
+from typing import List
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 
@@ -72,6 +74,58 @@ typecode = ser.read()
 
 res_mode = response[3] >> 6
 
+def read_lidar_data_once(after_iteration=0) -> List[Tuple[float, float]]:
+    current_iteration: int = 0
+    header_count: int = 0
+    scanned_points: List[Tuple[float, float]] = []
+
+    while True:
+        data = ser.read()
+        if data == SCAN_HEADER[header_count]:
+            header_count = header_count + 1
+        if header_count < 2:
+            continue
+
+        status = ser.read()
+        sample_quantity = ser.read()
+        fsa_angle = ser.read(2)
+        lsa_angle = ser.read(2)
+
+        status = int.from_bytes(status, 'little')
+        quantity = int.from_bytes(sample_quantity, 'little')
+        fsa = int.from_bytes(fsa_angle, 'little')
+        lsa = int.from_bytes(lsa_angle, 'little')
+
+        starting_angle = (fsa >> 1) / 64
+        ending_angle = (lsa >> 1) / 64
+        angle_diff = (ending_angle + 360) - starting_angle if ending_angle - starting_angle < 0 else ending_angle - starting_angle
+
+        for i in range(0, quantity):
+            sample_data = ser.read(3)
+            sample_data = int.from_bytes(sample_data, 'little')
+
+            second_byte = (sample_data >> 8) & 0b11111111
+            third_byte = (sample_data >> 16) & 0b11111111
+
+            distance = ((third_byte << 6) + (second_byte >> 2)) / 1000
+
+            angle = angle_diff / (quantity + 1) * (i + 1) + starting_angle
+            correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
+            final_angle = math.fmod(angle + correcting_angle, 360)
+
+            if current_iteration > after_iteration:
+                scanned_points.append((distance, final_angle))
+
+        if current_iteration > after_iteration:
+            return scanned_points
+
+        current_iteration = current_iteration + 1
+        header_count = 0
+
+def stop_lidar():
+    command = bytearray([0xA5, STOP_SCAN])
+    ser.write(command)
+
 if start_sign == YDLIDAR_START_SIGN:
 
     print("Retrieved response successfully.")
@@ -83,59 +137,9 @@ if start_sign == YDLIDAR_START_SIGN:
     print("Response mode : ", res_mode)
 
     if res_mode == CONTINUOUS:
-        header_count = 0
-        might_collide_angles = []
-        might_collide_dist = []
-
-        while True:
-            data = ser.read()
-            if data == SCAN_HEADER[header_count]:
-                header_count = header_count + 1
-            if header_count < 2:
-                continue
-
-            status = ser.read()
-            sample_quantity = ser.read()
-            fsa_angle = ser.read(2)
-            lsa_angle = ser.read(2)
-            checkcode = ser.read(2)
-
-            status = int.from_bytes(status, 'little')
-            quantity = int.from_bytes(sample_quantity, 'little')
-            fsa = int.from_bytes(fsa_angle, 'little')
-            lsa = int.from_bytes(lsa_angle, 'little')
-
-            packet_type = status & 0b1
-            frequency = ((status & 0b11111110) >> 1) / 10
-            starting_angle = (fsa >> 1) / 64
-            ending_angle = (lsa >> 1) / 64
-            angle_diff = (ending_angle + 360) - starting_angle if ending_angle - starting_angle < 0 else ending_angle - starting_angle
-
-            for i in range(0, quantity):
-                sample_data = ser.read(3)
-                sample_data = int.from_bytes(sample_data, 'little')
-
-                first_byte = sample_data & 0b11111111
-                second_byte = (sample_data >> 8) & 0b11111111
-                third_byte = (sample_data >> 16) & 0b11111111
-
-                intensity = first_byte + (second_byte & 0b11) * 256
-                distance = ((third_byte << 6) + (second_byte >> 2)) / 1000
-
-                angle = angle_diff / (quantity + 1) * (i + 1) + starting_angle
-                correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
-                final_angle = math.fmod(angle + correcting_angle, 360)
-
-                if distance > 0 and distance < MINIMUM_DISTANCE:
-                    might_collide_dist.append(distance)
-                    might_collide_angles.append(final_angle)
-
-            if packet_type == START_DATA:
-                might_collide_dist.clear()
-                might_collide_angles.clear()
-
-            header_count = 0
-
+        scanned_data = read_lidar_data_once(10)
+        print(scanned_data)
+        stop_lidar()
     elif res_mode == SINGLE:
         payload = ser.read(res_length)
         print("Payload: ", payload)
