@@ -92,6 +92,7 @@ def read_lidar_data_once(after_iteration=0) -> List[Tuple[float, float]]:
         lsa_angle = ser.read(2)
 
         status = int.from_bytes(status, 'little')
+        packet_type = status & 0b1
         quantity = int.from_bytes(sample_quantity, 'little')
         fsa = int.from_bytes(fsa_angle, 'little')
         lsa = int.from_bytes(lsa_angle, 'little')
@@ -100,6 +101,8 @@ def read_lidar_data_once(after_iteration=0) -> List[Tuple[float, float]]:
         ending_angle = (lsa >> 1) / 64
         angle_diff = (ending_angle + 360) - starting_angle if ending_angle - starting_angle < 0 else ending_angle - starting_angle
 
+        should_retrieve_data: bool = current_iteration > after_iteration
+
         for i in range(0, quantity):
             sample_data = ser.read(3)
             sample_data = int.from_bytes(sample_data, 'little')
@@ -107,24 +110,40 @@ def read_lidar_data_once(after_iteration=0) -> List[Tuple[float, float]]:
             second_byte = (sample_data >> 8) & 0b11111111
             third_byte = (sample_data >> 16) & 0b11111111
 
-            distance = ((third_byte << 6) + (second_byte >> 2)) / 1000
+            distance = ((third_byte << 6) + (second_byte >> 2))
 
             angle = angle_diff / (quantity + 1) * (i + 1) + starting_angle
             correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
             final_angle = math.fmod(angle + correcting_angle, 360)
+            final_radian = math.radians(final_angle)
 
-            if current_iteration > after_iteration:
-                scanned_points.append((distance, final_angle))
+            if should_retrieve_data:
+                scanned_points.append((distance, final_radian))
 
-        if current_iteration > after_iteration:
+        if should_retrieve_data and packet_type == START_DATA:
             return scanned_points
 
-        current_iteration = current_iteration + 1
+        if packet_type == START_DATA:
+            current_iteration = current_iteration + 1
         header_count = 0
 
 def stop_lidar():
     command = bytearray([0xA5, STOP_SCAN])
     ser.write(command)
+
+def visualize(scanned_data: List[Tuple[float, float]]):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='polar')
+
+    dist = []
+    radians = []
+
+    for data in scanned_data:
+        dist.append(data[0])
+        radians.append(data[1])
+
+    ax.scatter(radians, dist, s=0.1)
+    plt.show()
 
 if start_sign == YDLIDAR_START_SIGN:
 
@@ -137,9 +156,10 @@ if start_sign == YDLIDAR_START_SIGN:
     print("Response mode : ", res_mode)
 
     if res_mode == CONTINUOUS:
-        scanned_data = read_lidar_data_once(10)
+        scanned_data = read_lidar_data_once()
         print(scanned_data)
         stop_lidar()
+        visualize(scanned_data)
     elif res_mode == SINGLE:
         payload = ser.read(res_length)
         print("Payload: ", payload)
