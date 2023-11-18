@@ -54,6 +54,8 @@ class G2:
         return retrieved
 
     def _parse_response(self):
+        # Do not delete this even they look not useful.
+        # We need to at least 'pop out' data from serial so we can ensure get correct data afterwards.
         start_sign = self._serial.read(2)
         response = self._serial.read(4)
         typecode = self._serial.read()
