@@ -1,10 +1,11 @@
 from lidar import g2
+from mapper import mapper
 from typing import List
 import math
 
 import matplotlib.pyplot as plt
 
-def visualize(scanned_data: List[g2.LaserScanPoint]):
+def visualize_scan_points(scanned_data: List[g2.LaserScanPoint]):
     fig = plt.figure()
     ax = fig.add_subplot(projection='polar')
 
@@ -18,8 +19,17 @@ def visualize(scanned_data: List[g2.LaserScanPoint]):
     ax.scatter(radians, dist, s=0.1)
     plt.show()
 
+def visualize_occupancy_grid(grid: List[List[int]]):
+    plt.imshow(grid, cmap='binary', vmin=0, vmax=1)
+    plt.show()
+
 port = input("Enter port: ")
 g2_lidar = g2.G2(port)
 received = g2_lidar.read_data_once(10)
-visualize(received)
+visualize_scan_points(received)
+
+grid_mapper = mapper.Mapper()
+grid_mapper.lidar_to_grid(received)
+visualize_occupancy_grid(grid_mapper.occupancy_grid)
+
 g2_lidar._stop_scan()
