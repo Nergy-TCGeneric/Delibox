@@ -37,16 +37,8 @@ class G2:
     def __init__(self, port):
         self._serial = serial.Serial(port, 230400, timeout=2, write_timeout=2)
 
-    def start_scan_loop(self):
-        self._serial.write(START_SCAN)
-        # TODO: Use coroutine or something else?
-
-    def stop_scan(self):
-        self._serial.write(STOP_SCAN)
-
     def read_data_once(self, after_iteration=0):
-        # TODO: This is required, but lacks of specific reason. refactor this
-        self.start_scan_loop()
+        self._start_scan()
         self._parse_response()
         
         current_iteration: int = 0
@@ -57,12 +49,20 @@ class G2:
         while (current_iteration < after_iteration):
             current_iteration = current_iteration + 1
             retrieved = self._parse_one_cycle()
+
+        self._stop_scan()
         return retrieved
 
     def _parse_response(self):
         start_sign = self._serial.read(2)
         response = self._serial.read(4)
         typecode = self._serial.read()
+
+    def _start_scan(self):
+        self._serial.write(START_SCAN)
+
+    def _stop_scan(self):
+        self._serial.write(STOP_SCAN)
     
     def _parse_one_cycle(self) -> List[LaserScanPoint]: 
         header_count: int = 0
