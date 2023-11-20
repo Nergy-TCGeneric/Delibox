@@ -26,7 +26,7 @@ FREE: Final[float] = 0
 
 class Mapper:
     # 2D array for storing maps
-    occupancy_grid: List[List[int]]
+    occupancy_grid: List[List[float]]
 
     def __init__(self):
         # https://docs.python.org/3/faq/programming.html#how-do-i-create-a-multidimensional-list
