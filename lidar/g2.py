@@ -1,5 +1,5 @@
 import serial
-from typing import List
+from typing import Final, List
 from typing import Tuple 
 from dataclasses import dataclass
 
@@ -13,8 +13,12 @@ START_SCAN = bytearray([0xA5, 0x60])
 STOP_SCAN = bytearray([0xA5, 0x65])
 
 # Scan data category constants.
-CLOUD_DATA = 0
-START_DATA = 1
+CLOUD_DATA: Final[int] = 0
+START_DATA: Final[int] = 1
+
+# G2 LiDAR range constants. (in mm)
+MIN_RANGE: Final[int] = 120
+MAX_RANGE: Final[int] = 16000
 
 @dataclass
 class LaserScanPoint:
