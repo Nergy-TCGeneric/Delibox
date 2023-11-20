@@ -32,5 +32,3 @@ visualize_scan_points(received)
 grid_mapper = mapper.Mapper()
 grid_mapper.lidar_to_grid(received)
 visualize_occupancy_grid(grid_mapper.occupancy_grid)
-
-g2_lidar._stop_scan()
