@@ -21,8 +21,13 @@ def visualize_scan_points(scanned_data: List[g2.LaserScanPoint]):
     plt.show()
 
 def visualize_occupancy_grid(grid: List[List[int]]):
-    plt.imshow(grid, cmap='binary', vmin=0, vmax=1)
+    plt.imshow(grid, cmap='binary', vmin=0, vmax=255)
     plt.show()
+
+def serialize(grid: list[list[int]]):
+    with open('map.bin', 'wb') as f:
+        for row in grid:
+            f.write(bytes(row))
 
 port = input("Enter port: ")
 g2_lidar = g2.G2(port)
@@ -32,3 +37,5 @@ visualize_scan_points(received)
 grid_mapper = mapper.Mapper()
 grid_mapper.lidar_to_grid(received)
 visualize_occupancy_grid(grid_mapper.occupancy_grid)
+
+serialize(grid_mapper.occupancy_grid)

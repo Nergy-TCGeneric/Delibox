@@ -20,13 +20,13 @@ MAP_SIZE: Final[int] = 5000
 BIAS: Final[int] = MAP_SIZE // 2
 
 # State constants.
-OCCUPIED: Final[float] = 1
-UNCERTAIN: Final[float] = 0.5
-FREE: Final[float] = 0
+OCCUPIED: Final[int] = 255
+UNCERTAIN: Final[int] = 128
+FREE: Final[int] = 0
 
 class Mapper:
     # 2D array for storing maps
-    occupancy_grid: List[List[float]]
+    occupancy_grid: list[list[int]]
 
     def __init__(self):
         # https://docs.python.org/3/faq/programming.html#how-do-i-create-a-multidimensional-list
@@ -76,7 +76,7 @@ class Mapper:
             # Flood fill.
             centroid_x = (p1.x + p2.x + BIAS) // 3
             centroid_y = (p1.y + p2.y + BIAS) // 3
-            self._flood_fill(AdjustedPoint(centroid_x, centroid_y))
+            # self._flood_fill(AdjustedPoint(centroid_x, centroid_y))
 
     def _draw_walls(self, adjusted: list[AdjustedPoint]):
         for point in adjusted:
