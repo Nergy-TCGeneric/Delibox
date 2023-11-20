@@ -15,7 +15,7 @@ def visualize_scan_points(scanned_data: List[g2.LaserScanPoint]):
 
     for data in scanned_data:
         dist.append(data.distance)
-        radians.append(math.radians(data.angle))
+        radians.append(data.radian)
 
     ax.scatter(radians, dist, s=0.1)
     plt.show()

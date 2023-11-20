@@ -22,7 +22,7 @@ MAX_RANGE: Final[int] = 16000
 
 @dataclass
 class LaserScanPoint:
-    angle: float
+    radian: float
     distance: float 
 
 @dataclass
@@ -140,5 +140,5 @@ class G2:
             final_angle = math.fmod(angle + correcting_angle, 360)
             final_radian = math.radians(final_angle)
 
-            samples.append(LaserScanPoint(final_angle, distance))
+            samples.append(LaserScanPoint(final_radian, distance))
         return samples

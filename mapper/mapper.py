@@ -41,8 +41,8 @@ class Mapper:
             # This requires towards-zero rounding, as using ceil() and floor() might slightly offset results.
             # As rasterized points can be negative, we need to add bias to make sure
             # coordinates are greater or equal to 0.
-            x: int = int(point.distance * math.cos(point.angle)) + BIAS
-            y: int = int(point.distance * math.sin(point.angle)) + BIAS
+            x: int = int(point.distance * math.cos(point.radian)) + BIAS
+            y: int = int(point.distance * math.sin(point.radian)) + BIAS
 
             clamped_x: int = self._clamp(x, g2.MIN_RANGE, MAP_SIZE - 1)
             clamped_y: int = self._clamp(y, g2.MIN_RANGE, MAP_SIZE - 1)
