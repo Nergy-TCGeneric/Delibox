@@ -28,6 +28,7 @@ class Mapper:
     def lidar_to_grid(self, points: List[g2.LaserScanPoint]):
         adjusted = self._get_adjusted_points(points)
         self._draw_free_spaces(adjusted)
+        self._draw_walls(adjusted)
 
     def _get_adjusted_points(self, points: List[g2.LaserScanPoint]) -> list[AdjustedPoint]:
         clamped: list[AdjustedPoint] = []
@@ -53,6 +54,10 @@ class Mapper:
             rasterized = bresenham.bresenham(BIAS, point.x, BIAS, point.y)
             for p in rasterized:
                 self.occupancy_grid[p[1]][p[0]] = 0
+
+    def _draw_walls(self, adjusted: list[AdjustedPoint]):
+        for point in adjusted:
+           self.occupancy_grid[point.y][point.x] = 1
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
         return min(max(a, min_n), max_n)
