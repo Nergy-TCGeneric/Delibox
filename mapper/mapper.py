@@ -5,6 +5,7 @@ from typing import Final
 from dataclasses import dataclass
 import math
 
+
 @dataclass
 class AdjustedPoint:
     x: int
@@ -16,6 +17,7 @@ class AdjustedPoint:
     def is_in_range(self) -> bool:
         return (self.x > 0 and self.x < MAP_SIZE) and (self.y > 0 and self.y < MAP_SIZE)
 
+
 MAP_SIZE: Final[int] = 5000
 BIAS: Final[int] = MAP_SIZE // 2
 
@@ -23,6 +25,7 @@ BIAS: Final[int] = MAP_SIZE // 2
 OCCUPIED: Final[int] = 255
 UNCERTAIN: Final[int] = 128
 FREE: Final[int] = 0
+
 
 class Mapper:
     # 2D array for storing maps
@@ -40,7 +43,9 @@ class Mapper:
         self._draw_free_spaces(adjusted)
         self._draw_walls(adjusted)
 
-    def _get_adjusted_points(self, points: List[g2.LaserScanPoint]) -> list[AdjustedPoint]:
+    def _get_adjusted_points(
+        self, points: List[g2.LaserScanPoint]
+    ) -> list[AdjustedPoint]:
         clamped: list[AdjustedPoint] = []
         for point in points:
             # This requires towards-zero rounding, as using ceil() and floor() might slightly offset results.
@@ -62,7 +67,7 @@ class Mapper:
         origin = AdjustedPoint(BIAS, BIAS)
         # TODO: Use numpy instead, because we need a vectorization to speed up this process.
         for i in range(len(adjusted) - 1):
-            p1, p2 = adjusted[i], adjusted[i+1]
+            p1, p2 = adjusted[i], adjusted[i + 1]
 
             # Do not proceed if one of point is invalid, i.e, point with zero distance.
             if p1.is_zero_point() or p2.is_zero_point():
@@ -80,11 +85,11 @@ class Mapper:
 
     def _draw_walls(self, adjusted: list[AdjustedPoint]):
         for point in adjusted:
-           self.occupancy_grid[point.y][point.x] = OCCUPIED
+            self.occupancy_grid[point.y][point.x] = OCCUPIED
 
     def _draw_line(self, p1: AdjustedPoint, p2: AdjustedPoint):
         line = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
-        for l in line :
+        for l in line:
             self.occupancy_grid[l[1]][l[0]] = FREE
 
     def _flood_fill(self, start: AdjustedPoint):
@@ -99,7 +104,7 @@ class Mapper:
             self._fill_up_free_cells(queue, AdjustedPoint(current.y, current.x - 1))
             self._fill_up_free_cells(queue, AdjustedPoint(current.y + 1, current.x))
             self._fill_up_free_cells(queue, AdjustedPoint(current.y - 1, current.x))
-    
+
     def _fill_up_free_cells(self, queue: list[AdjustedPoint], p: AdjustedPoint):
         if not p.is_in_range():
             return

@@ -1,6 +1,7 @@
 from typing import List
 from typing import Tuple
 
+
 # https://www.roguebasin.com/index.php/Bresenham%27s_Line_Algorithm
 def bresenham(x0: int, x1: int, y0: int, y1: int) -> List[Tuple[int, int]]:
     dx = x1 - x0

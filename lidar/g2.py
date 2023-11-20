@@ -1,6 +1,6 @@
 import serial
 from typing import Final, List
-from typing import Tuple 
+from typing import Tuple
 from dataclasses import dataclass
 
 import math
@@ -20,10 +20,12 @@ START_DATA: Final[int] = 1
 MIN_RANGE: Final[int] = 120
 MAX_RANGE: Final[int] = 16000
 
+
 @dataclass
 class LaserScanPoint:
     radian: float
-    distance: float 
+    distance: float
+
 
 @dataclass
 class ScanHeader:
@@ -44,13 +46,13 @@ class G2:
     def read_data_once(self, after_iteration=0):
         self._start_scan()
         self._parse_response()
-        
+
         current_iteration: int = 0
         retrieved: List[LaserScanPoint]
 
         # Wait until it reaches to specified cycle.
         retrieved = self._parse_one_cycle()
-        while (current_iteration < after_iteration):
+        while current_iteration < after_iteration:
             current_iteration = current_iteration + 1
             retrieved = self._parse_one_cycle()
 
@@ -69,8 +71,8 @@ class G2:
 
     def _stop_scan(self):
         self._serial.write(STOP_SCAN)
-    
-    def _parse_one_cycle(self) -> List[LaserScanPoint]: 
+
+    def _parse_one_cycle(self) -> List[LaserScanPoint]:
         header_count: int = 0
         scanned_points: List[LaserScanPoint] = []
         is_first_header: bool = True
@@ -93,50 +95,64 @@ class G2:
 
             is_first_header = False
             header_count = 0
-        
+
         return scanned_points
 
     def _parse_scan_header_fields(self) -> ScanHeader:
         # This assumes incoming serial data is aligned correctly.
-        # If failed, this does not yield correct results anymore. 
+        # If failed, this does not yield correct results anymore.
         status = self._serial.read()
         sample_quantity = self._serial.read()
         fsa_angle = self._serial.read(2)
         lsa_angle = self._serial.read(2)
         check_code = self._serial.read(2)
 
-        status = int.from_bytes(status, 'little')
+        status = int.from_bytes(status, "little")
         frequency = (status >> 1) / 10
         packet_type = status & 0b1
-        quantity = int.from_bytes(sample_quantity, 'little')
-        fsa = int.from_bytes(fsa_angle, 'little')
-        lsa = int.from_bytes(lsa_angle, 'little')
+        quantity = int.from_bytes(sample_quantity, "little")
+        fsa = int.from_bytes(fsa_angle, "little")
+        lsa = int.from_bytes(lsa_angle, "little")
 
-        check_code = int.from_bytes(check_code, 'little')
+        check_code = int.from_bytes(check_code, "little")
 
         starting_angle = (fsa >> 1) / 64
         ending_angle = (lsa >> 1) / 64
-        angle_diff = (ending_angle + 360) - starting_angle if ending_angle - starting_angle < 0 else ending_angle - starting_angle
+        angle_diff = (
+            (ending_angle + 360) - starting_angle
+            if ending_angle - starting_angle < 0
+            else ending_angle - starting_angle
+        )
 
-        header_field = ScanHeader(frequency, packet_type, quantity, starting_angle, ending_angle, check_code)
+        header_field = ScanHeader(
+            frequency, packet_type, quantity, starting_angle, ending_angle, check_code
+        )
         return header_field
 
     def _parse_scan_samples(self, header: ScanHeader) -> List[LaserScanPoint]:
         # This assumes incoming serial data is aligned correctly.
-        # If failed, this does not yield correct results anymore. 
+        # If failed, this does not yield correct results anymore.
         samples = []
         for i in range(0, header.quantity):
             sample_data = self._serial.read(3)
-            sample_data = int.from_bytes(sample_data, 'little')
+            sample_data = int.from_bytes(sample_data, "little")
 
             second_byte = (sample_data >> 8) & 0b11111111
             third_byte = (sample_data >> 16) & 0b11111111
 
-            angle_diff = (header.end_angle + 360) - header.start_angle if header.end_angle - header.start_angle < 0 else header.end_angle - header.start_angle
-            distance = ((third_byte << 6) + (second_byte >> 2))
+            angle_diff = (
+                (header.end_angle + 360) - header.start_angle
+                if header.end_angle - header.start_angle < 0
+                else header.end_angle - header.start_angle
+            )
+            distance = (third_byte << 6) + (second_byte >> 2)
 
             angle = angle_diff / (header.quantity + 1) * (i + 1) + header.start_angle
-            correcting_angle = 0 if distance == 0 else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
+            correcting_angle = (
+                0
+                if distance == 0
+                else math.atan2(21.8 * (155.3 - distance), (155.3 * distance))
+            )
             final_angle = math.fmod(angle + correcting_angle, 360)
             final_radian = math.radians(final_angle)
 
