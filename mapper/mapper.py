@@ -10,9 +10,14 @@ class AdjustedPoint:
     x: int
     y: int
 
-MAP_MAX_RANGE: Final[int] = 5000
-MAP_SIZE: Final[int] = MAP_MAX_RANGE - g2.MIN_RANGE
-BIAS: Final[int] = (MAP_SIZE- g2.MIN_RANGE) // 2
+    def is_zero_point(self) -> bool:
+        return self.x == 0 and self.y == 0
+
+    def is_in_range(self) -> bool:
+        return (self.x > 0 and self.x < MAP_SIZE) and (self.y > 0 and self.y < MAP_SIZE)
+
+MAP_SIZE: Final[int] = 5000
+BIAS: Final[int] = MAP_SIZE // 2
 
 # State constants.
 OCCUPIED: Final[float] = 1
@@ -53,27 +58,55 @@ class Mapper:
         return clamped
 
     def _draw_free_spaces(self, adjusted: list[AdjustedPoint]):
+        origin = AdjustedPoint(BIAS, BIAS)
         # TODO: Use numpy instead, because we need a vectorization to speed up this process.
         for i in range(len(adjusted) - 1):
             p1, p2 = adjusted[i], adjusted[i+1]
-            # Origin to p1.
-            line_1 = bresenham.bresenham(BIAS, p1.x, BIAS, p1.y)
-            for l in line_1:
-                self.occupancy_grid[l[1]][l[0]] = FREE
 
-            # Origin to p2.
-            line_2 = bresenham.bresenham(BIAS, p2.x, BIAS, p2.y)
-            for l in line_2:
-                self.occupancy_grid[l[1]][l[0]] = FREE
+            # Do not proceed if one of point is invalid, i.e, point with zero distance.
+            if p1.is_zero_point() or p2.is_zero_point():
+                continue
 
-            # p1 to p2.
-            line_3 = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
-            for l in line_3:
-                self.occupancy_grid[l[1]][l[0]] = FREE
+            # Draw a triangle.
+            self._draw_line(origin, p1)
+            self._draw_line(origin, p2)
+            self._draw_line(p1, p2)
+
+            # Flood fill.
+            centroid_x = (p1.x + p2.x + BIAS) // 3
+            centroid_y = (p1.y + p2.y + BIAS) // 3
+            self._flood_fill(AdjustedPoint(centroid_x, centroid_y))
 
     def _draw_walls(self, adjusted: list[AdjustedPoint]):
         for point in adjusted:
            self.occupancy_grid[point.y][point.x] = OCCUPIED
+
+    def _draw_line(self, p1: AdjustedPoint, p2: AdjustedPoint):
+        line = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
+        for l in line :
+            self.occupancy_grid[l[1]][l[0]] = FREE
+
+    def _flood_fill(self, start: AdjustedPoint):
+        queue: list[AdjustedPoint] = []
+        queue.append(start)
+
+        while len(queue) > 0:
+            current = queue.pop()
+
+            # Search for four directions, respectively.
+            self._fill_up_free_cells(queue, AdjustedPoint(current.y, current.x + 1))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.y, current.x - 1))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.y + 1, current.x))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.y - 1, current.x))
+    
+    def _fill_up_free_cells(self, queue: list[AdjustedPoint], p: AdjustedPoint):
+        if not p.is_in_range():
+            return
+
+        state = self.occupancy_grid[p.y][p.x]
+        if state == UNCERTAIN:
+            self.occupancy_grid[p.y][p.x] = FREE
+            queue.append(p)
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
         return min(max(a, min_n), max_n)
