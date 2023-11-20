@@ -14,6 +14,11 @@ MAP_MAX_RANGE: Final[int] = 5000
 MAP_SIZE: Final[int] = MAP_MAX_RANGE - g2.MIN_RANGE
 BIAS: Final[int] = (MAP_SIZE- g2.MIN_RANGE) // 2
 
+# State constants.
+OCCUPIED: Final[float] = 1
+UNCERTAIN: Final[float] = 0.5
+FREE: Final[float] = 0
+
 class Mapper:
     # 2D array for storing maps
     occupancy_grid: List[List[int]]
@@ -23,7 +28,7 @@ class Mapper:
         # Careful! This map's size is roughly 252MB, which is really HUGE for some embedded devices.
         self.occupancy_grid = [None] * MAP_SIZE
         for i in range(0, MAP_SIZE):
-            self.occupancy_grid[i] = [0.5] * MAP_SIZE
+            self.occupancy_grid[i] = [UNCERTAIN] * MAP_SIZE
 
     def lidar_to_grid(self, points: List[g2.LaserScanPoint]):
         adjusted = self._get_adjusted_points(points)
@@ -49,15 +54,26 @@ class Mapper:
 
     def _draw_free_spaces(self, adjusted: list[AdjustedPoint]):
         # TODO: Use numpy instead, because we need a vectorization to speed up this process.
-        for point in adjusted:
-            # As we translated points from (0, 0) to (BIAS, BIAS), we need to set the origin point as (BIAS, BIAS).
-            rasterized = bresenham.bresenham(BIAS, point.x, BIAS, point.y)
-            for p in rasterized:
-                self.occupancy_grid[p[1]][p[0]] = 0
+        for i in range(len(adjusted) - 1):
+            p1, p2 = adjusted[i], adjusted[i+1]
+            # Origin to p1.
+            line_1 = bresenham.bresenham(BIAS, p1.x, BIAS, p1.y)
+            for l in line_1:
+                self.occupancy_grid[l[1]][l[0]] = FREE
+
+            # Origin to p2.
+            line_2 = bresenham.bresenham(BIAS, p2.x, BIAS, p2.y)
+            for l in line_2:
+                self.occupancy_grid[l[1]][l[0]] = FREE
+
+            # p1 to p2.
+            line_3 = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
+            for l in line_3:
+                self.occupancy_grid[l[1]][l[0]] = FREE
 
     def _draw_walls(self, adjusted: list[AdjustedPoint]):
         for point in adjusted:
-           self.occupancy_grid[point.y][point.x] = 1
+           self.occupancy_grid[point.y][point.x] = OCCUPIED
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
         return min(max(a, min_n), max_n)
