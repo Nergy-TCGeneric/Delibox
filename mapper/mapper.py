@@ -49,8 +49,9 @@ class Mapper:
             x: int = int(point.distance * math.cos(point.radian)) + BIAS
             y: int = int(point.distance * math.sin(point.radian)) + BIAS
 
-            clamped_x: int = self._clamp(x, g2.MIN_RANGE, MAP_SIZE - 1)
-            clamped_y: int = self._clamp(y, g2.MIN_RANGE, MAP_SIZE - 1)
+            # We need to retain informations of points with zero distances.
+            clamped_x: int = self._clamp(x, 0, MAP_SIZE - 1)
+            clamped_y: int = self._clamp(y, 0, MAP_SIZE - 1)
             p = AdjustedPoint(clamped_x, clamped_y)
 
             clamped.append(p)
