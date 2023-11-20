@@ -2,6 +2,7 @@ from lidar import g2
 from mapper import mapper
 from typing import List
 from measurement import timer
+from PIL import Image
 
 import matplotlib.pyplot as plt
 
@@ -32,6 +33,18 @@ def serialize(grid: list[list[int]]):
             f.write(bytes(row))
 
 
+def create_grayscale_bitmap(grid: list[list[int]]):
+    height = len(grid)
+    width = len(grid[0])
+    img = Image.new("L", (width, height))
+
+    for y in range(height):
+        for x in range(width):
+            img.putpixel((x, y), grid[y][x])
+
+    img.save("grayscale_bitmap.bmp")
+
+
 port = input("Enter port: ")
 g2_lidar = g2.G2(port)
 received = g2_lidar.read_data_once(10)
@@ -42,3 +55,4 @@ grid_mapper.lidar_to_grid(received)
 visualize_occupancy_grid(grid_mapper.occupancy_grid)
 
 serialize(grid_mapper.occupancy_grid)
+create_grayscale_bitmap(grid_mapper.occupancy_grid)
