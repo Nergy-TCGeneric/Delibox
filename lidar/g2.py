@@ -24,7 +24,7 @@ MAX_RANGE: Final[int] = 16000
 @dataclass
 class LaserScanPoint:
     radian: float
-    distance: float
+    distance: int
 
 
 @dataclass
