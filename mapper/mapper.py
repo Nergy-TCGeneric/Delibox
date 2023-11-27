@@ -1,4 +1,5 @@
 from collections import deque
+from operator import attrgetter
 from mapper import bresenham
 from lidar import g2
 from typing import List
@@ -8,21 +9,13 @@ import math
 
 
 @dataclass
-class AdjustedPoint:
+class Point:
     x: int
     y: int
 
-    def is_zero_point(self) -> bool:
-        return self.x == BIAS and self.y == BIAS
 
-    def is_in_range(self) -> bool:
-        return (self.x >= 0 and self.x < MAP_SIZE) and (
-            self.y >= 0 and self.y < MAP_SIZE
-        )
-
-
-MAP_SIZE: Final[int] = 5000
-BIAS: Final[int] = MAP_SIZE // 2
+# Map constants.
+DIST_RESOLUTION = 3  # 10 : 1 scale resolution in mm.
 
 # State constants.
 OCCUPIED: Final[int] = 255
@@ -33,47 +26,74 @@ FREE: Final[int] = 0
 class Mapper:
     # 2D array for storing maps
     occupancy_grid: list[list[int]]
-
-    def __init__(self):
-        # https://docs.python.org/3/faq/programming.html#how-do-i-create-a-multidimensional-list
-        # Careful! This map's size is roughly 252MB, which is really HUGE for some embedded devices.
-        self.occupancy_grid = [None] * MAP_SIZE
-        for i in range(0, MAP_SIZE):
-            self.occupancy_grid[i] = [UNCERTAIN] * MAP_SIZE
+    _dimension: tuple[int, int]
 
     def lidar_to_grid(self, points: List[g2.LaserScanPoint]):
-        origin = AdjustedPoint(BIAS, BIAS)
-        adjusted = self._get_adjusted_points(points)
+        rasterized = self._rasterize_points(points)
+        self._setup_grid(rasterized)
+        adjusted = self._adjust_points(rasterized)
+
+        center = self._get_center_point()
         self._draw_outer_lines(adjusted)
-        self._flood_fill(origin)
+        self._flood_fill(Point(center[0], center[1]))
         self._emphasize_walls(adjusted)
 
-    def _get_adjusted_points(
-        self, points: List[g2.LaserScanPoint]
-    ) -> list[AdjustedPoint]:
-        clamped: list[AdjustedPoint] = []
+    def _setup_grid(self, points: List[Point]) -> None:
+        # https://stackoverflow.com/a/6085482
+        # An adaptive approach to scale occupancy grid.
+        # We add some immediates behind to 'pad' the map.
+        min_x = min(points, key=attrgetter("x")).x - 1
+        min_y = min(points, key=attrgetter("y")).y - 1
+        max_x = max(points, key=attrgetter("x")).x + 1
+        max_y = max(points, key=attrgetter("y")).y + 1
+
+        x_width = (max_x - min_x) // DIST_RESOLUTION
+        y_width = (max_y - min_y) // DIST_RESOLUTION
+
+        # By doing this way, one should access grid like grid[y][x].
+        self.occupancy_grid = [
+            [UNCERTAIN for i in range(x_width)] for j in range(y_width)
+        ]
+        self._dimension = (x_width, y_width)
+
+    def _adjust_points(self, points: List[Point]) -> List[Point]:
+        x_center, y_center = self._get_center_point()
+
+        adjusted = []
+        for p in points:
+            a_x = self._clamp(p.x + x_center, 0, x_center * 2 - 1)
+            a_y = self._clamp(p.y + y_center, 0, y_center * 2 - 1)
+            adjusted.append(Point(a_x, a_y))
+
+        return adjusted
+
+    def _get_center_point(self) -> tuple[int, int]:
+        if self._dimension is None:
+            return (0, 0)
+
+        x_width = self._dimension[0]
+        y_width = self._dimension[1]
+        return (x_width // 2, y_width // 2)
+
+    def _rasterize_points(self, points: List[g2.LaserScanPoint]) -> list[Point]:
+        clamped: list[Point] = []
         for point in points:
             # This requires towards-zero rounding, as using ceil() and floor() might slightly offset results.
             # As rasterized points can be negative, we need to add bias to make sure
             # coordinates are greater or equal to 0.
-            x: int = int(point.distance * math.cos(point.radian)) + BIAS
-            y: int = int(point.distance * math.sin(point.radian)) + BIAS
-
-            # We need to retain informations of points with zero distances.
-            clamped_x: int = self._clamp(x, 0, MAP_SIZE - 1)
-            clamped_y: int = self._clamp(y, 0, MAP_SIZE - 1)
-            p = AdjustedPoint(clamped_x, clamped_y)
+            x: int = int(point.distance * math.cos(point.radian)) // DIST_RESOLUTION
+            y: int = int(point.distance * math.sin(point.radian)) // DIST_RESOLUTION
+            p = Point(x, y)
 
             clamped.append(p)
 
         return clamped
 
-    def _draw_outer_lines(self, adjusted: list[AdjustedPoint]):
+    def _draw_outer_lines(self, adjusted: list[Point]):
         points = deque()
 
-        # TODO: Use numpy instead, because we need a vectorization to speed up this process.
         for p in adjusted:
-            if not p.is_zero_point():
+            if not self._is_zero_point(p):
                 points.append(p)
 
             # When it's possible to draw a outer line, do it.
@@ -84,44 +104,55 @@ class Mapper:
         # Final touch, as this segment is disconnected at first.
         self._draw_line(points[0], adjusted[0])
 
-    def _emphasize_walls(self, adjusted: list[AdjustedPoint]):
+    def _is_zero_point(self, point: Point) -> bool:
+        center = self._get_center_point()
+        return point.x == center[0] and point.y == center[1]
+
+    def _emphasize_walls(self, adjusted: list[Point]):
         # Thicken the walls to 2px to make it more visible.
+        x_width, y_width = self._dimension
         for point in adjusted:
             self.occupancy_grid[point.y][point.x] = OCCUPIED
 
-            if point.y + 1 < MAP_SIZE:
+            if point.y + 1 < y_width:
                 self.occupancy_grid[point.y + 1][point.x] = OCCUPIED
-            if point.x + 1 < MAP_SIZE:
+            if point.x + 1 < x_width:
                 self.occupancy_grid[point.y][point.x + 1] = OCCUPIED
-            if point.y + 1 < MAP_SIZE and point.x + 1 < MAP_SIZE:
+            if point.y + 1 < y_width and point.x + 1 < x_width:
                 self.occupancy_grid[point.y + 1][point.x + 1] = OCCUPIED
 
-    def _draw_line(self, p1: AdjustedPoint, p2: AdjustedPoint):
+    def _draw_line(self, p1: Point, p2: Point):
         line = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
         for l in line:
             self.occupancy_grid[l[1]][l[0]] = FREE
 
-    def _flood_fill(self, start: AdjustedPoint):
-        queue: list[AdjustedPoint] = []
+    def _flood_fill(self, start: Point):
+        queue: list[Point] = []
         queue.append(start)
 
         while len(queue) > 0:
             current = queue.pop()
 
             # Search for four directions, respectively.
-            self._fill_up_free_cells(queue, AdjustedPoint(current.x, current.y + 1))
-            self._fill_up_free_cells(queue, AdjustedPoint(current.x, current.y - 1))
-            self._fill_up_free_cells(queue, AdjustedPoint(current.x + 1, current.y))
-            self._fill_up_free_cells(queue, AdjustedPoint(current.x - 1, current.y))
+            self._fill_up_free_cells(queue, Point(current.x, current.y + 1))
+            self._fill_up_free_cells(queue, Point(current.x, current.y - 1))
+            self._fill_up_free_cells(queue, Point(current.x + 1, current.y))
+            self._fill_up_free_cells(queue, Point(current.x - 1, current.y))
 
-    def _fill_up_free_cells(self, queue: list[AdjustedPoint], p: AdjustedPoint):
-        if not p.is_in_range():
+    def _fill_up_free_cells(self, queue: list[Point], p: Point):
+        if not self._is_point_in_grid(p):
             return
 
         state = self.occupancy_grid[p.y][p.x]
         if state == UNCERTAIN:
             self.occupancy_grid[p.y][p.x] = FREE
             queue.append(p)
+
+    def _is_point_in_grid(self, point: Point) -> bool:
+        x_width, y_width = self._dimension
+        return (point.x >= 0 and point.x < x_width) and (
+            point.y >= 0 and point.y < y_width
+        )
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
         return min(max(a, min_n), max_n)
