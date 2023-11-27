@@ -1,3 +1,4 @@
+from collections import deque
 from mapper import bresenham
 from lidar import g2
 from typing import List
@@ -12,10 +13,12 @@ class AdjustedPoint:
     y: int
 
     def is_zero_point(self) -> bool:
-        return self.x == 0 and self.y == 0
+        return self.x == BIAS and self.y == BIAS
 
     def is_in_range(self) -> bool:
-        return (self.x > 0 and self.x < MAP_SIZE) and (self.y > 0 and self.y < MAP_SIZE)
+        return (self.x >= 0 and self.x < MAP_SIZE) and (
+            self.y >= 0 and self.y < MAP_SIZE
+        )
 
 
 MAP_SIZE: Final[int] = 5000
@@ -39,9 +42,11 @@ class Mapper:
             self.occupancy_grid[i] = [UNCERTAIN] * MAP_SIZE
 
     def lidar_to_grid(self, points: List[g2.LaserScanPoint]):
+        origin = AdjustedPoint(BIAS, BIAS)
         adjusted = self._get_adjusted_points(points)
-        self._draw_free_spaces(adjusted)
-        self._draw_walls(adjusted)
+        self._draw_outer_lines(adjusted)
+        self._flood_fill(origin)
+        self._emphasize_walls(adjusted)
 
     def _get_adjusted_points(
         self, points: List[g2.LaserScanPoint]
@@ -63,29 +68,33 @@ class Mapper:
 
         return clamped
 
-    def _draw_free_spaces(self, adjusted: list[AdjustedPoint]):
-        origin = AdjustedPoint(BIAS, BIAS)
+    def _draw_outer_lines(self, adjusted: list[AdjustedPoint]):
+        points = deque()
+
         # TODO: Use numpy instead, because we need a vectorization to speed up this process.
-        for i in range(len(adjusted) - 1):
-            p1, p2 = adjusted[i], adjusted[i + 1]
+        for p in adjusted:
+            if not p.is_zero_point():
+                points.append(p)
 
-            # Do not proceed if one of point is invalid, i.e, point with zero distance.
-            if p1.is_zero_point() or p2.is_zero_point():
-                continue
+            # When it's possible to draw a outer line, do it.
+            if len(points) == 2:
+                self._draw_line(points[0], points[1])
+                points.popleft()
 
-            # Draw a triangle.
-            self._draw_line(origin, p1)
-            self._draw_line(origin, p2)
-            self._draw_line(p1, p2)
+        # Final touch, as this segment is disconnected at first.
+        self._draw_line(points[0], adjusted[0])
 
-            # Flood fill.
-            centroid_x = (p1.x + p2.x + BIAS) // 3
-            centroid_y = (p1.y + p2.y + BIAS) // 3
-            # self._flood_fill(AdjustedPoint(centroid_x, centroid_y))
-
-    def _draw_walls(self, adjusted: list[AdjustedPoint]):
+    def _emphasize_walls(self, adjusted: list[AdjustedPoint]):
+        # Thicken the walls to 2px to make it more visible.
         for point in adjusted:
             self.occupancy_grid[point.y][point.x] = OCCUPIED
+
+            if point.y + 1 < MAP_SIZE:
+                self.occupancy_grid[point.y + 1][point.x] = OCCUPIED
+            if point.x + 1 < MAP_SIZE:
+                self.occupancy_grid[point.y][point.x + 1] = OCCUPIED
+            if point.y + 1 < MAP_SIZE and point.x + 1 < MAP_SIZE:
+                self.occupancy_grid[point.y + 1][point.x + 1] = OCCUPIED
 
     def _draw_line(self, p1: AdjustedPoint, p2: AdjustedPoint):
         line = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
@@ -100,10 +109,10 @@ class Mapper:
             current = queue.pop()
 
             # Search for four directions, respectively.
-            self._fill_up_free_cells(queue, AdjustedPoint(current.y, current.x + 1))
-            self._fill_up_free_cells(queue, AdjustedPoint(current.y, current.x - 1))
-            self._fill_up_free_cells(queue, AdjustedPoint(current.y + 1, current.x))
-            self._fill_up_free_cells(queue, AdjustedPoint(current.y - 1, current.x))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.x, current.y + 1))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.x, current.y - 1))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.x + 1, current.y))
+            self._fill_up_free_cells(queue, AdjustedPoint(current.x - 1, current.y))
 
     def _fill_up_free_cells(self, queue: list[AdjustedPoint], p: AdjustedPoint):
         if not p.is_in_range():
