@@ -49,8 +49,8 @@ class Mapper:
         max_x = max(points, key=attrgetter("x")).x + 1
         max_y = max(points, key=attrgetter("y")).y + 1
 
-        x_width = (max_x - min_x) // self.resolution
-        y_width = (max_y - min_y) // self.resolution
+        x_width = max_x - min_x
+        y_width = max_y - min_y
 
         # By doing this way, one should access grid like grid[y][x].
         self.occupancy_grid = [
