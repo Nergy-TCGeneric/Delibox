@@ -21,10 +21,10 @@ def visualize_scan_points(scanned_data: List[g2.LaserScanPoint]):
     ax.scatter(radians, dist, s=0.1)
     plt.show()
 
-
 def visualize_occupancy_grid(grid: List[List[int]]):
     plt.imshow(grid, cmap="binary", vmin=0, vmax=255)
-    plt.show()
+    plt.draw()
+    plt.pause(0.16)
 
 
 def serialize(grid: list[list[int]]):
