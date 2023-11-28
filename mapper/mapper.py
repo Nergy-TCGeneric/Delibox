@@ -13,10 +13,6 @@ class Point:
     x: int
     y: int
 
-
-# Map constants.
-DIST_RESOLUTION = 3  # 10 : 1 scale resolution in mm.
-
 # State constants.
 OCCUPIED: Final[int] = 255
 UNCERTAIN: Final[int] = 128
@@ -26,9 +22,15 @@ FREE: Final[int] = 0
 class Mapper:
     # 2D array for storing maps
     occupancy_grid: list[list[int]]
+    resolution: int
     _dimension: tuple[int, int]
 
-    def lidar_to_grid(self, points: List[g2.LaserScanPoint]):
+    def __init__(self, resolution) -> None:
+        if resolution < 1:
+            raise ValueError("Resolution cannot be less than 1.")
+        self.resolution = resolution
+
+    def lidar_to_grid(self, points: List[g2.LaserScanPoint]) -> None:
         rasterized = self._rasterize_points(points)
         self._setup_grid(rasterized)
         adjusted = self._adjust_points(rasterized)
@@ -47,8 +49,8 @@ class Mapper:
         max_x = max(points, key=attrgetter("x")).x + 1
         max_y = max(points, key=attrgetter("y")).y + 1
 
-        x_width = (max_x - min_x) // DIST_RESOLUTION
-        y_width = (max_y - min_y) // DIST_RESOLUTION
+        x_width = (max_x - min_x) // self.resolution
+        y_width = (max_y - min_y) // self.resolution
 
         # By doing this way, one should access grid like grid[y][x].
         self.occupancy_grid = [
@@ -81,8 +83,8 @@ class Mapper:
             # This requires towards-zero rounding, as using ceil() and floor() might slightly offset results.
             # As rasterized points can be negative, we need to add bias to make sure
             # coordinates are greater or equal to 0.
-            x: int = int(point.distance * math.cos(point.radian)) // DIST_RESOLUTION
-            y: int = int(point.distance * math.sin(point.radian)) // DIST_RESOLUTION
+            x: int = int(point.distance * math.cos(point.radian)) // self.resolution
+            y: int = int(point.distance * math.sin(point.radian)) // self.resolution
             p = Point(x, y)
 
             clamped.append(p)
