@@ -169,24 +169,3 @@ class MPU9250:
 
     def get_ra(self):
         return self.compass_data
-
-
-if __name__ == "__main__":
-    sensor = MPU9250()
-
-try:
-    while True:
-        sensor.update_data()
-        accel_data = sensor.get_acceleration()
-        gyro_data = sensor.get_gyroscope()
-        ra_data = sensor.get_ra()
-
-        print("Acceleration (X,Y,Z):", accel_data)
-        print("Gyroscope (X,Y,Z):", gyro_data)
-        print("Compass (X,Y,Z):", ra_data)
-
-        time.sleep(1)
-except KeyboardInterrupt:
-    pass
-finally:
-    sensor.bus.close()
