@@ -121,7 +121,7 @@ class MPU9250:
         offset = -1 if reverse else 1
         high = self.bus.read_byte_data(self.MPU9250_ADDRESS, reg)
         low = self.bus.read_byte_data(self.MPU9250_ADDRESS, reg + offset)
-        value = (high << 8) + low
+        value = (high << 8) | low
         return value
 
     def read_acceleration(self):
