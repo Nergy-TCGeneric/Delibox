@@ -128,9 +128,9 @@ class MPU9250:
         y = self.read_word(MPU9250_ACCEL_YOUT_H)
         z = self.read_word(MPU9250_ACCEL_ZOUT_H)
         self.accel_data = [
-            x / ACCEL_SCALE_FACTOR,
-            y / ACCEL_SCALE_FACTOR,
-            z / ACCEL_SCALE_FACTOR,
+            x * ACCEL_SCALE_FACTOR,
+            y * ACCEL_SCALE_FACTOR,
+            z * ACCEL_SCALE_FACTOR,
         ]
 
     def read_gyroscope(self):
