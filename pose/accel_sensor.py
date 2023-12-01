@@ -58,6 +58,7 @@ class MPU9250:
         self.accel_data = [0, 0, 0]
         self.gyro_data = [0, 0, 0]
         self.compass_data = [0, 0, 0]
+        self.compass_adjustment = [0, 0, 0]
 
         # This needs some time to avoid Remote IOError.
         # https://stackoverflow.com/questions/52735862/getting-ioerror-errno-121-remote-i-o-error-with-smbus-on-python-raspberry-w
