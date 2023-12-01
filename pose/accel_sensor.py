@@ -75,11 +75,11 @@ class MPU9250:
         # https://github.com/bolderflight/invensense-imu/blob/main/src/mpu9250.cpp#L46
 
         # Power down AK8963.
-        self.bus.write_byte_data(AK8963_CTRL_1, 0, 0x00)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x00)
         # Wait just a bit longer, transition might take a while
         time.sleep(0.1)
         # Access to Fuse ROM to retrieve adjustment values.
-        self.bus.write_byte_data(AK8963_CTRL_1, 0, 0x0F)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x0F)
         # Wait for it
         time.sleep(0.1)
         # Magnetometer adjustment values for X, Y and Z.
@@ -93,24 +93,24 @@ class MPU9250:
             (self.read_byte(AK8963_ASA_Z) - 128.0) / 256.0 + 1.0
         ) * MAGNETIC_SCALE
         # Power down AK8963.
-        self.bus.write_byte_data(AK8963_CTRL_1, 0, 0x00)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x00)
         # Let AK8963 emit the 16-bit output and update in 100Hz frequency.
-        self.bus.write_byte_data(AK8963_CTRL_1, 0, 0x16)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x16)
 
         # Reset the MPU9250.
-        self.bus.write_byte_data(MPU9250_POWER_MGNT, 0, 0x80)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_POWER_MGNT, 0x80)
         # Wait just a bit until MPU9250 gets back to normal
         time.sleep(0.001)
         # Select the best available clock source - PLL or 20MHz internal osciliator.
-        self.bus.write_byte_data(MPU9250_POWER_MGNT, 0, 0x01)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_POWER_MGNT, 0x01)
         # Enable I2C master mode.
-        self.bus.write_byte_data(MPU9250_USER_CTRL, 0, 0x20)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_USER_CTRL, 0x20)
         # Set Accelerometer range to +- 8g.
-        self.bus.write_byte_data(MPU9250_ACC_CONFIG_1, 0, 0x10)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_ACC_CONFIG_1, 0x10)
         # Set Gyroscope range to +- 250 dps.
-        self.bus.write_byte_data(MPU9250_GYRO_CONFIG, 0, 0x00)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_GYRO_CONFIG, 0x00)
         # Set accelerometer's DLPF BW to 20Hz. This will induce about 8.87ms delay to output signal.
-        self.bus.write_byte_data(MPU9250_ACC_CONFIG_2, 0, 0x04)
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_ACC_CONFIG_2, 0x04)
 
     def read_byte(self, reg):
         return self.bus.read_byte_data(self.MPU9250_ADDRESS, reg)
