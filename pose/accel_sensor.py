@@ -38,9 +38,9 @@ AK8963_ASA_Z = 0x12
 
 # Scale factors.
 # https://github.com/bolderflight/invensense-imu/blob/main/src/mpu9250.cpp#L165
-ACCEL_SCALE_FACTOR = 8.0 / 32767.5  # Accelerator range +- 8g
-GYRO_SCALE_FACTOR = 25.0 / 32767.5  # Gyro degree per second +- 250
-MAGNETIC_SCALE = 4912 / 32760  # Assuming 16-bit output. unit is uT.
+ACCEL_SCALE_FACTOR = 8.0 / 32768.0  # Accelerator range +- 8g
+GYRO_SCALE_FACTOR = 25.0 / 32768.0  # Gyro degree per second +- 250
+MAGNETIC_SCALE = 4912.0 / 32768.0  # Assuming 16-bit output. unit is uT.
 
 
 class MPU9250:
