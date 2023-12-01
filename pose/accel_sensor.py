@@ -59,6 +59,9 @@ class MPU9250:
         self.gyro_data = [0, 0, 0]
         self.compass_data = [0, 0, 0]
 
+        # This needs some time to avoid Remote IOError.
+        # https://stackoverflow.com/questions/52735862/getting-ioerror-errno-121-remote-i-o-error-with-smbus-on-python-raspberry-w
+        time.sleep(1)
         self._init()
 
         who_am_i = self.read_byte(MPU9250_WHO_AM_I)
