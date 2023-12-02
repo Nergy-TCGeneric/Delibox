@@ -43,6 +43,11 @@ ACCEL_SCALE_FACTOR = 8.0 / 32768.0  # Accelerator range +- 8g
 GYRO_SCALE_FACTOR = 25.0 / 32768.0  # Gyro degree per second +- 250
 MAGNETIC_SCALE = 4912.0 / 32768.0  # Assuming 16-bit output. unit is uT.
 
+SAMPLE_DIVISION = 0
+MPU9250_SAMPLING_FREQ = 1000 / (SAMPLE_DIVISION + 1) # We use sampling rate 1000Hz.
+MPU9250_SAMPLING_PERIOD = 1 / MPU9250_SAMPLING_FREQ
+
+ALPHA = 0.96
 
 class MPU9250:
     address: int
