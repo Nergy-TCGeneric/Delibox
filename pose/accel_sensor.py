@@ -161,11 +161,7 @@ class MPU9250:
         x = self.read_word(MPU9250_RA_XOUT_H, True) + self.compass_adjustment[0]
         y = self.read_word(MPU9250_RA_YOUT_H, True) + self.compass_adjustment[1]
         z = self.read_word(MPU9250_RA_ZOUT_H, True) + self.compass_adjustment[2]
-        self.compass_data = [
-            x * self.compass_data[0],
-            y * self.compass_data[1],
-            z * self.compass_data[2],
-        ]
+        self.compass_data = [x * MAGNETIC_SCALE, y * MAGNETIC_SCALE, z * MAGNETIC_SCALE]
 
         # We must read ST2 register in order to update the magnetic measurement
         # https://download.mikroe.com/documents/datasheets/ak8963c-datasheet.pdf
