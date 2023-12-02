@@ -3,6 +3,7 @@ import smbus
 import time
 
 MPU9250_WHO_AM_I = 0x75
+AK8963_ADDR = 0x0C
 
 # MPU9250 registers.
 # Accelerometer.
@@ -31,6 +32,7 @@ MPU9250_ACC_CONFIG_1 = 0x1C
 MPU9250_ACC_CONFIG_2 = 0x1D
 MPU9250_POWER_MGNT = 0x6B
 MPU9250_USER_CTRL = 0x6A
+MPU9250_PIN = 0x37
 AK8963_CTRL_1 = 0x0A
 AK8963_ST2 = 0x09
 AK8963_ASA_X = 0x10
@@ -74,7 +76,7 @@ class MPU9250:
         time.sleep(1)
         self._init()
 
-        who_am_i = self.read_byte(MPU9250_WHO_AM_I)
+        who_am_i = self.read_byte(self.MPU9250_ADDRESS, MPU9250_WHO_AM_I)
         if who_am_i == 0x71:
             print("MPU_9250 is connected.")
         else:
@@ -90,8 +92,10 @@ class MPU9250:
         time.sleep(0.001)
         # Select the best available clock source - PLL or 20MHz internal osciliator.
         self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_POWER_MGNT, 0x01)
-        # Enable I2C master mode.
-        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_USER_CTRL, 0x20)
+        # Disable I2C master mode.
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_USER_CTRL, 0x00)
+        # Enable bypass mode. This makes AK8963 accessible via 0x0C address.
+        self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_PIN, 0x02)
         # Set Accelerometer range to +- 8g.
         self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_ACC_CONFIG_1, 0x10)
         # Set Gyroscope range to +- 250 dps.
@@ -100,36 +104,37 @@ class MPU9250:
         self.bus.write_byte_data(self.MPU9250_ADDRESS, MPU9250_ACC_CONFIG_2, 0x04)
 
         # Power down AK8963.
-        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x00)
+        self.bus.write_byte_data(AK8963_ADDR, AK8963_CTRL_1, 0x00)
         # Wait just a bit longer, transition might take a while
         time.sleep(0.1)
         # Access to Fuse ROM to retrieve adjustment values.
-        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x0F)
+        self.bus.write_byte_data(AK8963_ADDR, AK8963_CTRL_1, 0x0F)
         # Wait for it
         time.sleep(0.1)
         # Magnetometer adjustment values for X, Y and Z.
         self.compass_adjustment[0] = (
-            (self.read_byte(AK8963_ASA_X) - 128.0) / 256.0 + 1.0
-        ) * MAGNETIC_SCALE
+            (self.read_byte(AK8963_ADDR, AK8963_ASA_X) - 128.0) / 256.0 + 1.0
+        ) 
         self.compass_adjustment[1] = (
-            (self.read_byte(AK8963_ASA_Y) - 128.0) / 256.0 + 1.0
-        ) * MAGNETIC_SCALE
+            (self.read_byte(AK8963_ADDR, AK8963_ASA_Y) - 128.0) / 256.0 + 1.0
+        )
         self.compass_adjustment[2] = (
-            (self.read_byte(AK8963_ASA_Z) - 128.0) / 256.0 + 1.0
-        ) * MAGNETIC_SCALE
+            (self.read_byte(AK8963_ADDR, AK8963_ASA_Z) - 128.0) / 256.0 + 1.0
+        )
         # Power down AK8963.
-        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x00)
+        self.bus.write_byte_data(AK8963_ADDR, AK8963_CTRL_1, 0x00)
+        # Wait for it again
+        time.sleep(0.1)
         # Let AK8963 emit the 16-bit output and update in 100Hz frequency.
-        self.bus.write_byte_data(self.MPU9250_ADDRESS, AK8963_CTRL_1, 0x16)
+        self.bus.write_byte_data(AK8963_ADDR, AK8963_CTRL_1, 0x16)wqX
 
+    def read_byte(self, addr, reg):
+        return self.bus.read_byte_data(addr, reg)
 
-    def read_byte(self, reg):
-        return self.bus.read_byte_data(self.MPU9250_ADDRESS, reg)
-
-    def read_word(self, reg, reverse=False):
+    def read_word(self, addr, reg, reverse=False):
         offset = -1 if reverse else 1
-        high = self.bus.read_byte_data(self.MPU9250_ADDRESS, reg)
-        low = self.bus.read_byte_data(self.MPU9250_ADDRESS, reg + offset)
+        high = self.bus.read_byte_data(addr, reg)
+        low = self.bus.read_byte_data(addr, reg + offset)
 
         # Naively using (high << 8) | low yields incorrect result, since python doesn't know it's signed.
         # We need to convert them into signed representation, using 2's complement.
@@ -140,9 +145,9 @@ class MPU9250:
         return value
 
     def read_acceleration(self):
-        x = self.read_word(MPU9250_ACCEL_XOUT_H)
-        y = self.read_word(MPU9250_ACCEL_YOUT_H)
-        z = self.read_word(MPU9250_ACCEL_ZOUT_H)
+        x = self.read_word(self.MPU9250_ADDRESS, MPU9250_ACCEL_XOUT_H)
+        y = self.read_word(self.MPU9250_ADDRESS, MPU9250_ACCEL_YOUT_H)
+        z = self.read_word(self.MPU9250_ADDRESS, MPU9250_ACCEL_ZOUT_H)
         self.accel_data = [
             x * ACCEL_SCALE_FACTOR,
             y * ACCEL_SCALE_FACTOR,
@@ -150,22 +155,25 @@ class MPU9250:
         ]
 
     def read_gyroscope(self):
-        x = self.read_word(MPU9250_GYRO_XOUT_H)
-        y = self.read_word(MPU9250_GYRO_YOUT_H)
-        z = self.read_word(MPU9250_GYRO_ZOUT_H)
+        x = self.read_word(self.MPU9250_ADDRESS, MPU9250_GYRO_XOUT_H)
+        y = self.read_word(self.MPU9250_ADDRESS, MPU9250_GYRO_YOUT_H)
+        z = self.read_word(self.MPU9250_ADDRESS, MPU9250_GYRO_ZOUT_H)
         self.gyro_data[0] = self.gyro_data[0] + x * GYRO_SCALE_FACTOR * MPU9250_SAMPLING_PERIOD 
         self.gyro_data[1] = self.gyro_data[1] + y * GYRO_SCALE_FACTOR * MPU9250_SAMPLING_PERIOD
         self.gyro_data[2] = self.gyro_data[2] + z * GYRO_SCALE_FACTOR * MPU9250_SAMPLING_PERIOD
 
     def read_ra(self):
-        x = self.read_word(MPU9250_RA_XOUT_H, True) + self.compass_adjustment[0]
-        y = self.read_word(MPU9250_RA_YOUT_H, True) + self.compass_adjustment[1]
-        z = self.read_word(MPU9250_RA_ZOUT_H, True) + self.compass_adjustment[2]
+        x = self.read_word(AK8963_ADDR, MPU9250_RA_XOUT_H, True) * self.compass_adjustment[0]
+        y = self.read_word(AK8963_ADDR, MPU9250_RA_YOUT_H, True) * self.compass_adjustment[1]
+        z = self.read_word(AK8963_ADDR, MPU9250_RA_ZOUT_H, True) * self.compass_adjustment[2]
         self.compass_data = [x * MAGNETIC_SCALE, y * MAGNETIC_SCALE, z * MAGNETIC_SCALE]
 
         # We must read ST2 register in order to update the magnetic measurement
         # https://download.mikroe.com/documents/datasheets/ak8963c-datasheet.pdf
-        self.read_word(AK8963_ST2)
+        record2 = self.bus.read_byte_data(AK8963_ADDR, 0x0A)
+        print(record2)
+        record = self.bus.read_byte_data(AK8963_ADDR, AK8963_ST2)
+        print(record)
 
     def update_data(self):
         self.read_acceleration()
