@@ -174,6 +174,7 @@ class MPU9250:
     def update_data(self):
         self.read_acceleration()
         self.read_gyroscope()
+        self.read_ra()
         self.update_orientation()
 
     def update_orientation(self):
