@@ -1,3 +1,4 @@
+import math
 import smbus
 import time
 
@@ -50,6 +51,7 @@ class MPU9250:
     gyro_data: list[int]
     compass_data: list[int]
     compass_adjustment: list[int]
+    orientation: list[int]
 
     def __init__(self, address=0x68, bus_number=1):
         self.MPU9250_ADDRESS = address
@@ -59,6 +61,7 @@ class MPU9250:
         self.gyro_data = [0, 0, 0]
         self.compass_data = [0, 0, 0]
         self.compass_adjustment = [0, 0, 0]
+        self.orientation = [0, 0, 0]
 
         # This needs some time to avoid Remote IOError.
         # https://stackoverflow.com/questions/52735862/getting-ioerror-errno-121-remote-i-o-error-with-smbus-on-python-raspberry-w
@@ -144,20 +147,18 @@ class MPU9250:
         x = self.read_word(MPU9250_GYRO_XOUT_H)
         y = self.read_word(MPU9250_GYRO_YOUT_H)
         z = self.read_word(MPU9250_GYRO_ZOUT_H)
-        self.gyro_data = [
-            x * GYRO_SCALE_FACTOR,
-            y * GYRO_SCALE_FACTOR,
-            z * GYRO_SCALE_FACTOR,
-        ]
+        self.gyro_data[0] = self.gyro_data[0] + x * GYRO_SCALE_FACTOR * MPU9250_SAMPLING_PERIOD 
+        self.gyro_data[1] = self.gyro_data[1] + y * GYRO_SCALE_FACTOR * MPU9250_SAMPLING_PERIOD
+        self.gyro_data[2] = self.gyro_data[2] + z * GYRO_SCALE_FACTOR * MPU9250_SAMPLING_PERIOD
 
     def read_ra(self):
-        x = self.read_word(MPU9250_RA_XOUT_H, True)
-        y = self.read_word(MPU9250_RA_YOUT_H, True)
-        z = self.read_word(MPU9250_RA_ZOUT_H, True)
+        x = self.read_word(MPU9250_RA_XOUT_H, True) + self.compass_adjustment[0]
+        y = self.read_word(MPU9250_RA_YOUT_H, True) + self.compass_adjustment[1]
+        z = self.read_word(MPU9250_RA_ZOUT_H, True) + self.compass_adjustment[2]
         self.compass_data = [
-            x * self.compass_adjustment[0],
-            y * self.compass_adjustment[1],
-            z * self.compass_adjustment[2],
+            x * self.compass_data[0],
+            y * self.compass_data[1],
+            z * self.compass_data[2],
         ]
 
         # We must read ST2 register in order to update the magnetic measurement
@@ -167,12 +168,36 @@ class MPU9250:
     def update_data(self):
         self.read_acceleration()
         self.read_gyroscope()
-        self.read_ra()
+        self.update_orientation()
+
+    def update_orientation(self):
+        ax, ay, az = self.accel_data[0], self.accel_data[1], self.accel_data[2]
+        pitch_accel = math.atan2(ay, math.sqrt(ax*ax + az*az)) * 180 / math.pi
+        roll_accel = math.atan2(-ax, math.sqrt(ay*ay + az*az)) * 180 / math.pi
+
+        pitch_angle, roll_angle = self.orientation[0], self.orientation[1]
+        # https://gist.github.com/shoebahmedadeel/0d8ca4eaa65664492cf1db2ab3a9e572
+        yh = self.compass_data[1] * math.cos(roll_accel) - self.compass_data[2] * math.sin(roll_accel)
+        xh = self.compass_data[0] * math.cos(pitch_accel) + self.compass_data[1] * math.sin(roll_accel) * math.cos(pitch_accel) \
+            + self.compass_data[2] * math.cos(roll_accel) * math.sin(pitch_accel)
+        gx, gy = self.gyro_data[0] , self.gyro_data[1]
+
+        # Complementary filter.
+        pitch_angle = ALPHA * (gx + pitch_angle) + (1 - ALPHA) * pitch_accel
+        roll_angle = ALPHA * (gy + roll_angle) + (1 - ALPHA) * roll_accel
+        yaw_angle = math.atan2(yh, xh) * 180 / math.pi
+
+        self.orientation[0] = pitch_angle
+        self.orientation[1] = roll_angle
+        self.orientation[2] = yaw_angle
 
     def get_raw_acceleration(self):
         return self.accel_data
 
-    def get_gyroscope(self):
+    def get_orientation(self):
+        return self.orientation
+
+    def get_raw_gyroscope(self):
         return self.gyro_data
 
     def get_ra(self):
