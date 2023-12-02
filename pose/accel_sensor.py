@@ -121,7 +121,13 @@ class MPU9250:
         offset = -1 if reverse else 1
         high = self.bus.read_byte_data(self.MPU9250_ADDRESS, reg)
         low = self.bus.read_byte_data(self.MPU9250_ADDRESS, reg + offset)
+
+        # Naively using (high << 8) | low yields incorrect result, since python doesn't know it's signed.
+        # We need to convert them into signed representation, using 2's complement.
+        # https://blog.naver.com/PostView.nhn?blogId=jihoonine&logNo=221854558852
         value = (high << 8) | low
+        if value >= 0x8000:
+            value = -((65535 - value) + 1)
         return value
 
     def read_acceleration(self):
@@ -163,7 +169,7 @@ class MPU9250:
         self.read_gyroscope()
         self.read_ra()
 
-    def get_acceleration(self):
+    def get_raw_acceleration(self):
         return self.accel_data
 
     def get_gyroscope(self):
