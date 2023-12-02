@@ -42,6 +42,7 @@ AK8963_ASA_Z = 0x12
 ACCEL_SCALE_FACTOR = 8.0 / 32768.0  # Accelerator range +- 8g
 GYRO_SCALE_FACTOR = 25.0 / 32768.0  # Gyro degree per second +- 250
 MAGNETIC_SCALE = 4912.0 / 32768.0  # Assuming 16-bit output. unit is uT.
+MAGNETIC_DECLINATION = 0.1418953 # 2023-12-02, Mokpo, in radian.
 
 SAMPLE_DIVISION = 0
 MPU9250_SAMPLING_FREQ = 1000 / (SAMPLE_DIVISION + 1) # We use sampling rate 1000Hz.
@@ -190,7 +191,7 @@ class MPU9250:
         # Complementary filter.
         pitch_angle = ALPHA * (gx + pitch_angle) + (1 - ALPHA) * pitch_accel
         roll_angle = ALPHA * (gy + roll_angle) + (1 - ALPHA) * roll_accel
-        yaw_angle = math.atan2(yh, xh) * 180 / math.pi
+        yaw_angle = math.atan2(yh, xh) * 180 / math.pi + MAGNETIC_DECLINATION
 
         self.orientation[0] = pitch_angle
         self.orientation[1] = roll_angle
