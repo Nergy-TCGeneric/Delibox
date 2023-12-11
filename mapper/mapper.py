@@ -170,3 +170,39 @@ class Submapper:
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
         return min(max(a, min_n), max_n)
+
+
+class GlobalMapper:
+    _occupancy_grid: Map
+    observer_pos: Point
+
+    def __init__(self, initial_dimension: tuple[int, int]) -> None:
+        self._occupancy_grid = Map(initial_dimension)
+        # We set observer's position to (0, 0), the center of the grid.
+        self.observer_pos = Point(0, 0)
+
+    def update(self, submap: Map) -> None:
+        # TODO: Assuming the submap is in bounds. Change it later
+        x_width, y_height = submap.dimension
+        grid_x_width, grid_y_height = self._occupancy_grid.dimension
+
+        for y in range(y_height):
+            for x in range(x_width):
+                g_y = grid_y_height // 2 + self.observer_pos.y + (y - y_height // 2)
+                g_x = grid_x_width // 2 + self.observer_pos.x + (x - x_width // 2)
+
+                # Only update the obstacle / free space.
+                if submap.content[y][x] == FREE or submap.content[y][x] == OCCUPIED:
+                    self._occupancy_grid.content[g_y][g_x] = submap.content[y][x]
+
+    def update_observer_pos(self, new_pos: Point) -> None:
+        x_width, y_height = self._occupancy_grid.dimension
+        if (
+            new_pos.x < -(x_width // 2) + 1
+            or new_pos.x > (x_width // 2) - 1
+            or new_pos.y < -(y_height // 2) + 1
+            or new_pos.y > (y_height // 2) + 1
+        ):
+            return
+
+        self.observer_pos = new_pos

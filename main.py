@@ -1,6 +1,7 @@
 from lidar import g2
 from mapper import mapper
 from typing import List
+from mapper.mapper import Point
 from measurement import timer
 from PIL import Image
 
@@ -47,11 +48,16 @@ def create_grayscale_bitmap(grid: list[list[int]]):
 
 port = input("Enter port: ")
 g2_lidar = g2.G2(port)
+
 submapper = mapper.Submapper(18)
+global_mapper = mapper.GlobalMapper((250, 250))
 
-scanned_data = g2_lidar.read_data_once(10)
-submap = submapper.lidar_to_submap(scanned_data)
-visualize_occupancy_grid(submap.content)
+for i in range(0, 5):
+    scanned_data = g2_lidar.read_data_once(10)
+    submap = submapper.lidar_to_submap(scanned_data)
+    global_mapper.update(submap)
+    global_mapper.update_observer_pos(Point(i, 0))
+    visualize_occupancy_grid(global_mapper._occupancy_grid.content)
 
-serialize(submap.content)
-create_grayscale_bitmap(submap.content)
+serialize(global_mapper._occupancy_grid.content)
+create_grayscale_bitmap(global_mapper._occupancy_grid.content)
