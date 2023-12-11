@@ -14,6 +14,10 @@ class Point:
     x: int
     y: int
 
+    def __iter__(self):
+        yield self.x
+        yield self.y
+
 
 @dataclass
 class Map:
@@ -182,18 +186,8 @@ class GlobalMapper:
         self.observer_pos = Point(0, 0)
 
     def update(self, submap: Map) -> None:
-        # TODO: Assuming the submap is in bounds. Change it later
-        x_width, y_height = submap.dimension
-        grid_x_width, grid_y_height = self._occupancy_grid.dimension
-
-        for y in range(y_height):
-            for x in range(x_width):
-                g_y = grid_y_height // 2 + self.observer_pos.y + (y - y_height // 2)
-                g_x = grid_x_width // 2 + self.observer_pos.x + (x - x_width // 2)
-
-                # Only update the obstacle / free space.
-                if submap.content[y][x] == FREE or submap.content[y][x] == OCCUPIED:
-                    self._occupancy_grid.content[g_y][g_x] = submap.content[y][x]
+        self._resize_on_demand(submap)
+        self._update_occupancy_grid(submap)
 
     def update_observer_pos(self, new_pos: Point) -> None:
         x_width, y_height = self._occupancy_grid.dimension
@@ -206,3 +200,64 @@ class GlobalMapper:
             return
 
         self.observer_pos = new_pos
+
+    def _resize_on_demand(self, submap: Map) -> None:
+        x_width, y_height = submap.dimension
+        grid_x_width, grid_y_height = self._occupancy_grid.dimension
+        x, y = self.observer_pos
+
+        # Check if the resizing is required:
+        new_grid_x_width, new_grid_y_height = grid_x_width, grid_y_height
+        offset = (0, 0)
+        if (x + grid_x_width // 2 + 1) - x_width // 2 < 0:
+            new_grid_x_width = x_width + abs(x) + 2
+            offset = (offset[0] + (new_grid_x_width - grid_x_width) // 2, offset[1])
+        if (x + grid_x_width // 2 - 1) + x_width // 2 > grid_x_width:
+            new_grid_x_width = x_width + abs(x) + 2
+            offset = (offset[0] - (new_grid_x_width - grid_x_width) // 2, offset[1])
+
+        if (y + grid_y_height // 2 - 1) - y_height // 2 < 0:
+            new_grid_y_height = grid_y_height + y_height + abs(y) + 2
+            offset = (
+                offset[0],
+                offset[1] + (new_grid_y_height - grid_y_height) // 2,
+            )
+        if (y + grid_y_height // 2 + 1) + y_height // 2 > grid_y_height:
+            new_grid_y_height = grid_y_height + y_height + abs(y) + 2
+            offset = (
+                offset[0],
+                offset[1] - (new_grid_y_height - grid_y_height) // 2,
+            )
+
+        print(grid_x_width, grid_y_height, new_grid_x_width, new_grid_y_height)
+
+        if new_grid_x_width != grid_x_width or new_grid_y_height != grid_y_height:
+            self._resize_grid((new_grid_x_width, new_grid_y_height), offset)
+            # Update the observer position accordingly
+            self.observer_pos = Point(x + offset[0], y + offset[1])
+
+    def _resize_grid(self, new_dim: tuple[int, int], offset: tuple[int, int]) -> None:
+        new_grid = Map(new_dim)
+        new_x_width, new_y_height = new_grid.dimension
+        x_width, y_height = self._occupancy_grid.dimension
+
+        for y in range(y_height):
+            for x in range(x_width):
+                new_x = x + new_x_width // 2 + offset[0] - 2
+                new_y = y + new_y_height // 2 + offset[1] - 2
+                new_grid.content[new_y][new_x] = self._occupancy_grid.content[y][x]
+
+        self._occupancy_grid = new_grid
+
+    def _update_occupancy_grid(self, submap: Map) -> None:
+        x_width, y_height = submap.dimension
+        grid_x_width, grid_y_height = self._occupancy_grid.dimension
+
+        for y in range(y_height):
+            for x in range(x_width):
+                g_y = grid_y_height // 2 + self.observer_pos.y + (y - y_height // 2)
+                g_x = grid_x_width // 2 + self.observer_pos.x + (x - x_width // 2)
+
+                # Only update the obstacle / free space.
+                if submap.content[y][x] == FREE or submap.content[y][x] == OCCUPIED:
+                    self._occupancy_grid.content[g_y][g_x] = submap.content[y][x]
