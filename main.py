@@ -47,12 +47,11 @@ def create_grayscale_bitmap(grid: list[list[int]]):
 
 port = input("Enter port: ")
 g2_lidar = g2.G2(port)
-received = g2_lidar.read_data_once(10)
-visualize_scan_points(received)
+submapper = mapper.Submapper(18)
 
-grid_mapper = mapper.Mapper()
-grid_mapper.lidar_to_grid(received)
-visualize_occupancy_grid(grid_mapper.occupancy_grid)
+scanned_data = g2_lidar.read_data_once(10)
+submap = submapper.lidar_to_submap(scanned_data)
+visualize_occupancy_grid(submap.content)
 
-serialize(grid_mapper.occupancy_grid)
-create_grayscale_bitmap(grid_mapper.occupancy_grid)
+serialize(submap.content)
+create_grayscale_bitmap(submap.content)

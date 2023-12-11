@@ -5,6 +5,7 @@ from lidar import g2
 from typing import List
 from typing import Final
 from dataclasses import dataclass
+from measurement import timer
 import math
 
 
@@ -13,34 +14,64 @@ class Point:
     x: int
     y: int
 
+
+@dataclass
+class Map:
+    dimension: tuple[int, int]
+    content: list[list[int]]
+
+    def __init__(self, dimension: tuple[int, int]) -> None:
+        self.dimension = dimension
+        x_width, y_width = dimension
+
+        # By doing this way, one should access grid like grid[y][x].
+        self.content = [[UNCERTAIN for _ in range(x_width)] for _ in range(y_width)]
+
+    def get_center_point(self) -> tuple[int, int]:
+        if self.dimension is None:
+            return (0, 0)
+
+        x_width = self.dimension[0]
+        y_width = self.dimension[1]
+        return (x_width // 2, y_width // 2)
+
+    def is_center_point(self, p: Point) -> bool:
+        center = self.get_center_point()
+        return p.x == center[0] and p.y == center[1]
+
+    def is_inside(self, p: Point) -> bool:
+        x_width, y_width = self.dimension
+        return (p.x >= 0 and p.x < x_width) and (p.y >= 0 and p.y < y_width)
+
+
 # State constants.
 OCCUPIED: Final[int] = 255
 UNCERTAIN: Final[int] = 128
 FREE: Final[int] = 0
 
 
-class Mapper:
-    # 2D array for storing maps
-    occupancy_grid: list[list[int]]
+class Submapper:
     resolution: int
-    _dimension: tuple[int, int]
 
     def __init__(self, resolution) -> None:
         if resolution < 1:
             raise ValueError("Resolution cannot be less than 1.")
         self.resolution = resolution
 
-    def lidar_to_grid(self, points: List[g2.LaserScanPoint]) -> None:
+    @timer.measure_time_in_ns
+    def lidar_to_submap(self, points: List[g2.LaserScanPoint]) -> Map:
         rasterized = self._rasterize_points(points)
-        self._setup_grid(rasterized)
-        adjusted = self._adjust_points(rasterized)
+        submap = self._setup_submap(rasterized)
+        adjusted = self._adjust_points(submap, rasterized)
 
-        center = self._get_center_point()
-        self._draw_outer_lines(adjusted)
-        self._flood_fill(Point(center[0], center[1]))
-        self._emphasize_walls(adjusted)
+        center = submap.get_center_point()
+        self._draw_outer_lines(submap, adjusted)
+        self._flood_fill(submap, Point(center[0], center[1]))
+        self._emphasize_walls(submap, adjusted)
 
-    def _setup_grid(self, points: List[Point]) -> None:
+        return submap
+
+    def _setup_submap(self, points: List[Point]) -> Map:
         # https://stackoverflow.com/a/6085482
         # An adaptive approach to scale occupancy grid.
         # We add some immediates behind to 'pad' the map.
@@ -52,14 +83,10 @@ class Mapper:
         x_width = max_x - min_x
         y_width = max_y - min_y
 
-        # By doing this way, one should access grid like grid[y][x].
-        self.occupancy_grid = [
-            [UNCERTAIN for i in range(x_width)] for j in range(y_width)
-        ]
-        self._dimension = (x_width, y_width)
+        return Map((x_width, y_width))
 
-    def _adjust_points(self, points: List[Point]) -> List[Point]:
-        x_center, y_center = self._get_center_point()
+    def _adjust_points(self, map: Map, points: List[Point]) -> List[Point]:
+        x_center, y_center = map.get_center_point()
 
         adjusted = []
         for p in points:
@@ -69,14 +96,7 @@ class Mapper:
 
         return adjusted
 
-    def _get_center_point(self) -> tuple[int, int]:
-        if self._dimension is None:
-            return (0, 0)
-
-        x_width = self._dimension[0]
-        y_width = self._dimension[1]
-        return (x_width // 2, y_width // 2)
-
+    @timer.measure_time_in_ns
     def _rasterize_points(self, points: List[g2.LaserScanPoint]) -> list[Point]:
         clamped: list[Point] = []
         for point in points:
@@ -91,44 +111,42 @@ class Mapper:
 
         return clamped
 
-    def _draw_outer_lines(self, adjusted: list[Point]):
+    @timer.measure_time_in_ns
+    def _draw_outer_lines(self, map: Map, adjusted: list[Point]):
         points = deque()
 
         for p in adjusted:
-            if not self._is_zero_point(p):
+            if not map.is_center_point(p):
                 points.append(p)
 
             # When it's possible to draw a outer line, do it.
             if len(points) == 2:
-                self._draw_line(points[0], points[1])
+                self._draw_line(map, points[0], points[1])
                 points.popleft()
 
         # Final touch, as this segment is disconnected at first.
-        self._draw_line(points[0], adjusted[0])
+        self._draw_line(map, points[0], adjusted[0])
 
-    def _is_zero_point(self, point: Point) -> bool:
-        center = self._get_center_point()
-        return point.x == center[0] and point.y == center[1]
-
-    def _emphasize_walls(self, adjusted: list[Point]):
+    def _emphasize_walls(self, map: Map, adjusted: list[Point]):
         # Thicken the walls to 2px to make it more visible.
-        x_width, y_width = self._dimension
+        x_width, y_width = map.dimension
         for point in adjusted:
-            self.occupancy_grid[point.y][point.x] = OCCUPIED
+            map.content[point.y][point.x] = OCCUPIED
 
             if point.y + 1 < y_width:
-                self.occupancy_grid[point.y + 1][point.x] = OCCUPIED
+                map.content[point.y + 1][point.x] = OCCUPIED
             if point.x + 1 < x_width:
-                self.occupancy_grid[point.y][point.x + 1] = OCCUPIED
+                map.content[point.y][point.x + 1] = OCCUPIED
             if point.y + 1 < y_width and point.x + 1 < x_width:
-                self.occupancy_grid[point.y + 1][point.x + 1] = OCCUPIED
+                map.content[point.y + 1][point.x + 1] = OCCUPIED
 
-    def _draw_line(self, p1: Point, p2: Point):
+    def _draw_line(self, map: Map, p1: Point, p2: Point):
         line = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
         for l in line:
-            self.occupancy_grid[l[1]][l[0]] = FREE
+            map.content[l[1]][l[0]] = FREE
 
-    def _flood_fill(self, start: Point):
+    @timer.measure_time_in_ns
+    def _flood_fill(self, map: Map, start: Point):
         queue: list[Point] = []
         queue.append(start)
 
@@ -136,25 +154,19 @@ class Mapper:
             current = queue.pop()
 
             # Search for four directions, respectively.
-            self._fill_up_free_cells(queue, Point(current.x, current.y + 1))
-            self._fill_up_free_cells(queue, Point(current.x, current.y - 1))
-            self._fill_up_free_cells(queue, Point(current.x + 1, current.y))
-            self._fill_up_free_cells(queue, Point(current.x - 1, current.y))
+            self._fill_up_free_cells(map, queue, Point(current.x, current.y + 1))
+            self._fill_up_free_cells(map, queue, Point(current.x, current.y - 1))
+            self._fill_up_free_cells(map, queue, Point(current.x + 1, current.y))
+            self._fill_up_free_cells(map, queue, Point(current.x - 1, current.y))
 
-    def _fill_up_free_cells(self, queue: list[Point], p: Point):
-        if not self._is_point_in_grid(p):
+    def _fill_up_free_cells(self, map: Map, queue: list[Point], p: Point):
+        if not map.is_inside(p):
             return
 
-        state = self.occupancy_grid[p.y][p.x]
+        state = map.content[p.y][p.x]
         if state == UNCERTAIN:
-            self.occupancy_grid[p.y][p.x] = FREE
+            map.content[p.y][p.x] = FREE
             queue.append(p)
-
-    def _is_point_in_grid(self, point: Point) -> bool:
-        x_width, y_width = self._dimension
-        return (point.x >= 0 and point.x < x_width) and (
-            point.y >= 0 and point.y < y_width
-        )
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
         return min(max(a, min_n), max_n)
