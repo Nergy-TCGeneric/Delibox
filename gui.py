@@ -16,6 +16,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from lidar import g2
+
 MIN_SPEED_DIAL = 1
 MAX_SPEED_DIAL = 100
 
@@ -25,6 +27,9 @@ resolution_h = 480
 button_size = math.floor(
     (resolution_w if resolution_w < resolution_h else resolution_h) / 10
 )
+
+port = input("Please enter the port of G2: ")
+lidar = g2.G2(port)
 
 
 class BodyControl(QWidget):
@@ -64,7 +69,7 @@ class BodyControl(QWidget):
         grid_layout.addWidget(button_turnright, 1, 2)
 
         button_kill = QPushButton("X", self)
-        button_kill.clicked.connect(QApplication.instance().quit)
+        button_kill.clicked.connect(self.close)
         kill_layout.addWidget(button_kill)
 
         button_stop = QPushButton("-", self)
@@ -89,6 +94,9 @@ class BodyControl(QWidget):
         self.setWindowTitle("Prototype")
         self.show()
 
+        # When everything is done, enable the G2
+        lidar.enable()
+
     # buttons_actions_funcs
     def moveForward(self):
         self.motor_ctrl.front(self.speed)
@@ -104,6 +112,10 @@ class BodyControl(QWidget):
 
     def stop(self):
         self.motor_ctrl.stop()
+
+    def close(self):
+        lidar.disable()
+        QApplication.instance().quit()
 
     def slider_position(self, p):
         self.power_status_label.setText(str(p))

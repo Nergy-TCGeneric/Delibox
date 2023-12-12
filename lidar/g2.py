@@ -44,7 +44,7 @@ class G2:
         self._serial = serial.Serial(port, 230400, timeout=2, write_timeout=2)
 
     def read_data_once(self, after_iteration=0):
-        self._start_scan()
+        self.enable()
         self._parse_response()
 
         current_iteration: int = 0
@@ -56,8 +56,11 @@ class G2:
             current_iteration = current_iteration + 1
             retrieved = self._parse_one_cycle()
 
-        self._stop_scan()
+        self.disable()
         return retrieved
+
+    def read_data(self):
+        self._parse_response()
 
     def _parse_response(self):
         # Do not delete this even they look not useful.
@@ -66,10 +69,10 @@ class G2:
         response = self._serial.read(4)
         typecode = self._serial.read()
 
-    def _start_scan(self):
+    def enable(self):
         self._serial.write(START_SCAN)
 
-    def _stop_scan(self):
+    def disable(self):
         self._serial.write(STOP_SCAN)
 
     def _parse_one_cycle(self) -> List[LaserScanPoint]:
