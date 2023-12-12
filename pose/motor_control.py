@@ -39,40 +39,40 @@ class WheelEncoder:
 class MotorControl:
     # These are all pre-defined GPIO configuration.
     # Change this if pin connection has altered.
-    motor = Motor(forward=14, backward=15)
-    motor2 = Motor(forward=17, backward=27)
-    motor3 = Motor(forward=20, backward=21)
-    motor4 = Motor(forward=13, backward=19)
+    front_right = Motor(forward=14, backward=15)
+    front_left = Motor(forward=27, backward=17)
+    rear_left = Motor(forward=20, backward=21)
+    rear_right = Motor(forward=16, backward=26)
 
     left_encoder = WheelEncoder(8)
     right_encoder = WheelEncoder(7)
 
     def front(self, speed=0.3):
-        self.motor.forward(speed)
-        self.motor2.forward(speed)
-        self.motor3.forward(speed)
-        self.motor4.forward(speed)
+        self.front_right.forward(speed)
+        self.front_left.forward(speed)
+        self.rear_left.forward(speed)
+        self.rear_right.forward(speed)
 
     def stop(self):
-        self.motor.stop()
-        self.motor2.stop()
-        self.motor3.stop(),
-        self.motor4.stop(),
+        self.front_right.stop()
+        self.front_left.stop()
+        self.rear_left.stop(),
+        self.rear_right.stop(),
 
     def back(self, speed=0.3):
-        self.motor.backward(speed)
-        self.motor2.backward(speed)
-        self.motor3.backward(speed)
-        self.motor4.backward(speed)
+        self.front_right.backward(speed)
+        self.front_left.backward(speed)
+        self.rear_left.backward(speed)
+        self.rear_right.backward(speed)
 
     def right(self, speed=0.3):
-        self.motor.forward(speed)
-        self.motor3.forward(speed)
-        self.motor2.backward(speed)
-        self.motor4.backward(speed)
+        self.front_right.forward(speed)
+        self.rear_left.forward(speed)
+        self.front_left.backward(speed)
+        self.rear_right.backward(speed)
 
     def left(self, speed=0.3):
-        self.motor2.forward(speed)
-        self.motor4.forward(speed)
-        self.motor.backward(speed)
-        self.motor3.backward(speed)
+        self.front_left.forward(speed)
+        self.rear_right.forward(speed)
+        self.front_right.backward(speed)
+        self.rear_left.backward(speed)
