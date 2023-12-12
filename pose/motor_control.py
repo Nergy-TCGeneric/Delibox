@@ -1,6 +1,14 @@
-from gpiozero import Motor
+import math
+from gpiozero import Motor, DigitalInputDevice
+import time
+from enum import Enum
 
 # Coded by Tae hyeon, Jung.
+
+
+class Direction(Enum):
+    FORWARD = 1
+    BACKWARD = -1
 
 
 class MotorControl:
@@ -40,3 +48,29 @@ class MotorControl:
         self.motor4.forward(speed)
         self.motor.backward(speed)
         self.motor3.backward(speed)
+
+
+class WheelEncoder:
+    _tick_per_second: float = 0
+    _encoder_device: DigitalInputDevice
+    _direction: Direction = Direction.FORWARD
+    _last_timestamp: float
+
+    def __init__(self, pin) -> None:
+        self._encoder_device = DigitalInputDevice(pin=pin)
+        self._encoder_device.when_activated
+
+    def _calculate_time_diff(self) -> None:
+        current_time = time.time()
+        if self._last_timestamp is not None:
+            # This assumes an ideal wheel motion.
+            elasped_time = current_time - self._last_timestamp
+            self._tick_per_second = 1 / elasped_time
+        self._last_timestamp = current_time
+
+    def get_angular_velocity(self) -> float:
+        # Since wheel encoder has 20 holes, we calculated this by doing 2 * math.pi / 20.
+        return math.pi / 10 * self._tick_per_second * self._direction.value
+
+    def change_direction(self, new_dir: Direction) -> None:
+        self._direction = new_dir
