@@ -3,6 +3,8 @@ from typing import Final, List
 from typing import Tuple
 from dataclasses import dataclass
 
+import queue
+import threading
 import math
 
 # Byte sequence constant.
@@ -38,10 +40,18 @@ class ScanHeader:
 
 
 class G2:
+    _scanned_queue: queue.Queue
     _serial: serial.Serial
+    _processing_thread: threading.Thread
+    _thread_lock: threading.Lock
+    _thread_event: threading.Event
+    _should_stop: bool = False
 
     def __init__(self, port):
         self._serial = serial.Serial(port, 230400, timeout=2, write_timeout=2)
+        # Only accept data up to 5.
+        self._scanned_queue = queue.Queue(5)
+        self._thread_lock = threading.Lock()
 
     def read_data_once(self, after_iteration=0):
         self.enable()
@@ -59,8 +69,25 @@ class G2:
         self.disable()
         return retrieved
 
-    def read_data(self):
-        self._parse_response()
+    def _process_data(self):
+        while True:
+            # If disable() is called, stop this thread
+            if self._should_stop:
+                return
+
+            # Don't proceed any further if queue is full
+            if self._scanned_queue.full():
+                continue
+
+            self._parse_response()
+            received = self._parse_one_cycle()
+
+            # Might be impact performance, as the received is a list of about 700 elements. (7Hz)
+            with self._thread_lock:
+                self._scanned_queue.put(received)
+
+    def read_data(self) -> list[LaserScanPoint]:
+        return self._scanned_queue.get(timeout=1)
 
     def _parse_response(self):
         # Do not delete this even they look not useful.
@@ -70,9 +97,14 @@ class G2:
         typecode = self._serial.read()
 
     def enable(self):
+        self._should_stop = False
         self._serial.write(START_SCAN)
+        self._processing_thread = threading.Thread(target=self._process_data)
+        self._processing_thread.start()
 
     def disable(self):
+        self._should_stop = True
+        self._processing_thread.join()
         self._serial.write(STOP_SCAN)
 
     def _parse_one_cycle(self) -> List[LaserScanPoint]:

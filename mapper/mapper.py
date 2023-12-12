@@ -129,7 +129,8 @@ class Submapper:
                 points.popleft()
 
         # Final touch, as this segment is disconnected at first.
-        self._draw_line(map, points[0], adjusted[0])
+        if len(points) > 0:
+            self._draw_line(map, points[0], adjusted[0])
 
     def _emphasize_walls(self, map: Map, adjusted: list[Point]):
         # Thicken the walls to 2px to make it more visible.

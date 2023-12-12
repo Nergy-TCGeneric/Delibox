@@ -52,12 +52,17 @@ g2_lidar = g2.G2(port)
 submapper = mapper.Submapper(18)
 global_mapper = mapper.GlobalMapper((250, 250))
 
-for i in range(0, 5):
-    scanned_data = g2_lidar.read_data_once(10)
+g2_lidar.enable()
+
+for i in range(0, 100):
+    scanned_data = g2_lidar.read_data()
     submap = submapper.lidar_to_submap(scanned_data)
     global_mapper.update(submap)
-    global_mapper.update_observer_pos(Point(i, 0))
+    global_mapper.update_observer_pos(Point(10 * i, 0))
     visualize_occupancy_grid(global_mapper._occupancy_grid.content)
+
+plt.close()
+g2_lidar.disable()
 
 serialize(global_mapper._occupancy_grid.content)
 create_grayscale_bitmap(global_mapper._occupancy_grid.content)
