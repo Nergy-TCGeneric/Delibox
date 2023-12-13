@@ -1,3 +1,4 @@
+import numpy as np
 from lidar import g2
 from mapper import mapper
 from typing import List
@@ -22,19 +23,20 @@ def visualize_scan_points(scanned_data: List[g2.LaserScanPoint]):
     ax.scatter(radians, dist, s=0.1)
     plt.show()
 
-def visualize_occupancy_grid(grid: List[List[int]]):
+
+def visualize_occupancy_grid(grid: np.ndarray):
     plt.imshow(grid, cmap="binary", vmin=0, vmax=255)
     plt.draw()
     plt.pause(0.16)
 
 
-def serialize(grid: list[list[int]]):
+def serialize(grid: np.ndarray):
     with open("map.bin", "wb") as f:
         for row in grid:
             f.write(bytes(row))
 
 
-def create_grayscale_bitmap(grid: list[list[int]]):
+def create_grayscale_bitmap(grid: np.ndarray):
     height = len(grid)
     width = len(grid[0])
     img = Image.new("L", (width, height))

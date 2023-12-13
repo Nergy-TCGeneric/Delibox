@@ -7,6 +7,7 @@ from typing import Final
 from dataclasses import dataclass
 from measurement import timer
 import math
+import numpy as np
 
 
 @dataclass
@@ -22,14 +23,14 @@ class Point:
 @dataclass
 class Map:
     dimension: tuple[int, int]
-    content: list[list[int]]
+    content: np.ndarray
 
     def __init__(self, dimension: tuple[int, int]) -> None:
         self.dimension = dimension
         x_width, y_width = dimension
 
         # By doing this way, one should access grid like grid[y][x].
-        self.content = [[UNCERTAIN for _ in range(x_width)] for _ in range(y_width)]
+        self.content = np.ones((y_width, x_width)) * UNCERTAIN
 
     def get_center_point(self) -> tuple[int, int]:
         if self.dimension is None:
@@ -136,19 +137,19 @@ class Submapper:
         # Thicken the walls to 2px to make it more visible.
         x_width, y_width = map.dimension
         for point in adjusted:
-            map.content[point.y][point.x] = OCCUPIED
+            map.content[point.y, point.x] = OCCUPIED
 
             if point.y + 1 < y_width:
-                map.content[point.y + 1][point.x] = OCCUPIED
+                map.content[point.y + 1, point.x] = OCCUPIED
             if point.x + 1 < x_width:
-                map.content[point.y][point.x + 1] = OCCUPIED
+                map.content[point.y, point.x + 1] = OCCUPIED
             if point.y + 1 < y_width and point.x + 1 < x_width:
-                map.content[point.y + 1][point.x + 1] = OCCUPIED
+                map.content[point.y + 1, point.x + 1] = OCCUPIED
 
     def _draw_line(self, map: Map, p1: Point, p2: Point):
         line = bresenham.bresenham(p1.x, p2.x, p1.y, p2.y)
         for l in line:
-            map.content[l[1]][l[0]] = FREE
+            map.content[l[1], l[0]] = FREE
 
     @timer.measure_time_in_ns
     def _flood_fill(self, map: Map, start: Point):
@@ -168,9 +169,9 @@ class Submapper:
         if not map.is_inside(p):
             return
 
-        state = map.content[p.y][p.x]
+        state = map.content[p.y, p.x]
         if state == UNCERTAIN:
-            map.content[p.y][p.x] = FREE
+            map.content[p.y, p.x] = FREE
             queue.append(p)
 
     def _clamp(self, a: int, min_n: int, max_n: int) -> int:
@@ -246,7 +247,7 @@ class GlobalMapper:
             for x in range(x_width):
                 new_x = x + new_x_width // 2 + offset[0] - 2
                 new_y = y + new_y_height // 2 + offset[1] - 2
-                new_grid.content[new_y][new_x] = self._occupancy_grid.content[y][x]
+                new_grid.content[new_y, new_x] = self._occupancy_grid.content[y, x]
 
         self._occupancy_grid = new_grid
 
@@ -260,5 +261,5 @@ class GlobalMapper:
                 g_x = grid_x_width // 2 + self.observer_pos.x + (x - x_width // 2)
 
                 # Only update the obstacle / free space.
-                if submap.content[y][x] == FREE or submap.content[y][x] == OCCUPIED:
-                    self._occupancy_grid.content[g_y][g_x] = submap.content[y][x]
+                if submap.content[y, x] == FREE or submap.content[y, x] == OCCUPIED:
+                    self._occupancy_grid.content[g_y, g_x] = submap.content[y, x]

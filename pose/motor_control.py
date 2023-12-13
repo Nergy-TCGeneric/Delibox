@@ -10,6 +10,7 @@ class Direction(Enum):
     FORWARD = 1
     BACKWARD = -1
 
+
 class WheelEncoder:
     _tick_per_second: float = 0
     _encoder_device: DigitalInputDevice
@@ -36,6 +37,7 @@ class WheelEncoder:
     def change_direction(self, new_dir: Direction) -> None:
         self._direction = new_dir
 
+
 class MotorControl:
     # These are all pre-defined GPIO configuration.
     # Change this if pin connection has altered.
@@ -53,6 +55,9 @@ class MotorControl:
         self.rear_left.forward(speed)
         self.rear_right.forward(speed)
 
+        self.left_encoder.change_direction(Direction.FORWARD)
+        self.right_encoder.change_direction(Direction.FORWARD)
+
     def stop(self):
         self.front_right.stop()
         self.front_left.stop()
@@ -65,14 +70,23 @@ class MotorControl:
         self.rear_left.backward(speed)
         self.rear_right.backward(speed)
 
+        self.left_encoder.change_direction(Direction.BACKWARD)
+        self.right_encoder.change_direction(Direction.BACKWARD)
+
     def right(self, speed=0.3):
         self.front_right.forward(speed)
         self.rear_left.forward(speed)
         self.front_left.backward(speed)
         self.rear_right.backward(speed)
 
+        self.left_encoder.change_direction(Direction.FORWARD)
+        self.right_encoder.change_direction(Direction.BACKWARD)
+
     def left(self, speed=0.3):
         self.front_left.forward(speed)
         self.rear_right.forward(speed)
         self.front_right.backward(speed)
         self.rear_left.backward(speed)
+
+        self.left_encoder.change_direction(Direction.BACKWARD)
+        self.right_encoder.change_direction(Direction.FORWARD)
