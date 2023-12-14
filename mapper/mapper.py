@@ -1,3 +1,4 @@
+from cgi import print_form
 from collections import deque
 from operator import attrgetter
 from mapper import bresenham
@@ -22,17 +23,17 @@ class Point:
 
 @dataclass
 class Map:
-    dimension: tuple[int, int]
+    dimension: "tuple[int, int]"
     content: np.ndarray
 
-    def __init__(self, dimension: tuple[int, int]) -> None:
+    def __init__(self, dimension: "tuple[int, int]") -> None:
         self.dimension = dimension
         x_width, y_width = dimension
 
         # By doing this way, one should access grid like grid[y][x].
         self.content = np.ones((y_width, x_width)) * UNCERTAIN
 
-    def get_center_point(self) -> tuple[int, int]:
+    def get_center_point(self) -> "tuple[int, int]":
         if self.dimension is None:
             return (0, 0)
 
@@ -63,7 +64,6 @@ class Submapper:
             raise ValueError("Resolution cannot be less than 1.")
         self.resolution = resolution
 
-    @timer.measure_time_in_ns
     def lidar_to_submap(self, points: List[g2.LaserScanPoint]) -> Map:
         rasterized = self._rasterize_points(points)
         submap = self._setup_submap(rasterized)
@@ -101,8 +101,7 @@ class Submapper:
 
         return adjusted
 
-    @timer.measure_time_in_ns
-    def _rasterize_points(self, points: List[g2.LaserScanPoint]) -> list[Point]:
+    def _rasterize_points(self, points: List[g2.LaserScanPoint]) -> "list[Point]":
         clamped: list[Point] = []
         for point in points:
             # This requires towards-zero rounding, as using ceil() and floor() might slightly offset results.
@@ -116,8 +115,7 @@ class Submapper:
 
         return clamped
 
-    @timer.measure_time_in_ns
-    def _draw_outer_lines(self, map: Map, adjusted: list[Point]):
+    def _draw_outer_lines(self, map: Map, adjusted: "list[Point]"):
         points = deque()
 
         for p in adjusted:
@@ -133,7 +131,7 @@ class Submapper:
         if len(points) > 0:
             self._draw_line(map, points[0], adjusted[0])
 
-    def _emphasize_walls(self, map: Map, adjusted: list[Point]):
+    def _emphasize_walls(self, map: Map, adjusted: "list[Point]"):
         # Thicken the walls to 2px to make it more visible.
         x_width, y_width = map.dimension
         for point in adjusted:
@@ -151,7 +149,6 @@ class Submapper:
         for l in line:
             map.content[l[1], l[0]] = FREE
 
-    @timer.measure_time_in_ns
     def _flood_fill(self, map: Map, start: Point):
         queue: list[Point] = []
         queue.append(start)
@@ -165,7 +162,7 @@ class Submapper:
             self._fill_up_free_cells(map, queue, Point(current.x + 1, current.y))
             self._fill_up_free_cells(map, queue, Point(current.x - 1, current.y))
 
-    def _fill_up_free_cells(self, map: Map, queue: list[Point], p: Point):
+    def _fill_up_free_cells(self, map: Map, queue: "list[Point]", p: Point):
         if not map.is_inside(p):
             return
 
@@ -182,7 +179,7 @@ class GlobalMapper:
     _occupancy_grid: Map
     observer_pos: Point
 
-    def __init__(self, initial_dimension: tuple[int, int]) -> None:
+    def __init__(self, initial_dimension: "tuple[int, int]") -> None:
         self._occupancy_grid = Map(initial_dimension)
         # We set observer's position to (0, 0), the center of the grid.
         self.observer_pos = Point(0, 0)
@@ -204,61 +201,82 @@ class GlobalMapper:
         self.observer_pos = new_pos
 
     def _resize_on_demand(self, submap: Map) -> None:
-        x_width, y_height = submap.dimension
-        grid_x_width, grid_y_height = self._occupancy_grid.dimension
-        x, y = self.observer_pos
+        submap_width, submap_height = submap.dimension
+        grid_width, grid_height = self._occupancy_grid.dimension
+        obs_x, obs_y = self.observer_pos
+
+        # x and y starts from center of the grid.
+        grid_x, grid_y = obs_x + grid_width / 2, obs_y + grid_height / 2
+        # Min, max values
+        min_x = grid_x - submap_width / 2
+        max_x = grid_x + submap_width / 2
+        min_y = grid_y - submap_height / 2
+        max_y = grid_y + submap_height / 2
 
         # Check if the resizing is required:
-        new_grid_x_width, new_grid_y_height = grid_x_width, grid_y_height
+        new_grid_width, new_grid_height = grid_width, grid_height
         offset = (0, 0)
-        if (x + grid_x_width // 2 + 1) - x_width // 2 < 0:
-            new_grid_x_width = x_width + abs(x) + 2
-            offset = (offset[0] + (new_grid_x_width - grid_x_width) // 2, offset[1])
-        if (x + grid_x_width // 2 - 1) + x_width // 2 > grid_x_width:
-            new_grid_x_width = x_width + abs(x) + 2
-            offset = (offset[0] - (new_grid_x_width - grid_x_width) // 2, offset[1])
 
-        if (y + grid_y_height // 2 - 1) - y_height // 2 < 0:
-            new_grid_y_height = grid_y_height + y_height + abs(y) + 2
+        # Expanding to left
+        if min_x < 0:
+            new_grid_width = new_grid_width + abs(round(min_x))
+            offset = (offset[0] + new_grid_width - grid_width, offset[1])
+
+        # Expanding to right
+        if max_x > grid_width:
+            new_grid_width = abs(int(max_x))
+
+        # Expanding to up
+        if min_y < 0:
+            new_grid_height = new_grid_height + abs(round(min_y))
             offset = (
                 offset[0],
-                offset[1] + (new_grid_y_height - grid_y_height) // 2,
-            )
-        if (y + grid_y_height // 2 + 1) + y_height // 2 > grid_y_height:
-            new_grid_y_height = grid_y_height + y_height + abs(y) + 2
-            offset = (
-                offset[0],
-                offset[1] - (new_grid_y_height - grid_y_height) // 2,
+                offset[1] + new_grid_height - grid_height,
             )
 
-        print(grid_x_width, grid_y_height, new_grid_x_width, new_grid_y_height)
+        # Expanding to down
+        if max_y > grid_height:
+            new_grid_height = abs(int(max_y))
 
-        if new_grid_x_width != grid_x_width or new_grid_y_height != grid_y_height:
-            self._resize_grid((new_grid_x_width, new_grid_y_height), offset)
+        print(f"Submap shape: {submap_width}, {submap_height}")
+        print(f"Grid shape: {grid_width, grid_height}")
+        print(f"Observer point: {obs_x}, {obs_y}")
+        print(f"Min, max(x, y): ({min_x}, {max_x}), ({min_y}, {max_y})")
+        print(f"New grid shape: {new_grid_width}, {new_grid_height}")
+
+        if new_grid_width != grid_width or new_grid_height != grid_height:
+            self._resize_grid((new_grid_width, new_grid_height), offset)
             # Update the observer position accordingly
-            self.observer_pos = Point(x + offset[0], y + offset[1])
+            # self.observer_pos = Point(obs_x + offset[0], obs_y + offset[1])
+            print(f"New observer point: {self.observer_pos.x}, {self.observer_pos.y}")
 
-    def _resize_grid(self, new_dim: tuple[int, int], offset: tuple[int, int]) -> None:
+    def _resize_grid(
+        self, new_dim: "tuple[int, int]", offset: "tuple[int, int]"
+    ) -> None:
         new_grid = Map(new_dim)
-        new_x_width, new_y_height = new_grid.dimension
         x_width, y_height = self._occupancy_grid.dimension
 
         for y in range(y_height):
             for x in range(x_width):
-                new_x = x + new_x_width // 2 + offset[0] - 2
-                new_y = y + new_y_height // 2 + offset[1] - 2
+                new_x = x + offset[0]
+                new_y = y + offset[1]
                 new_grid.content[new_y, new_x] = self._occupancy_grid.content[y, x]
 
         self._occupancy_grid = new_grid
 
     def _update_occupancy_grid(self, submap: Map) -> None:
-        x_width, y_height = submap.dimension
-        grid_x_width, grid_y_height = self._occupancy_grid.dimension
+        submap_width, submap_height = submap.dimension
+        grid_width, grid_height = self._occupancy_grid.dimension
 
-        for y in range(y_height):
-            for x in range(x_width):
-                g_y = grid_y_height // 2 + self.observer_pos.y + (y - y_height // 2)
-                g_x = grid_x_width // 2 + self.observer_pos.x + (x - x_width // 2)
+        grid_x = int(grid_width / 2) + self.observer_pos.x
+        grid_y = int(grid_height / 2) + self.observer_pos.y
+
+        for y in range(submap_height):
+            for x in range(submap_width):
+                submap_x = x - int(submap_width / 2)
+                submap_y = y - int(submap_height / 2)
+                g_y = grid_y + submap_y
+                g_x = grid_x + submap_x
 
                 # Only update the obstacle / free space.
                 if submap.content[y, x] == FREE or submap.content[y, x] == OCCUPIED:

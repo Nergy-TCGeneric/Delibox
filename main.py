@@ -55,16 +55,22 @@ submapper = mapper.Submapper(18)
 global_mapper = mapper.GlobalMapper((250, 250))
 
 g2_lidar.enable()
+import random
 
-for i in range(0, 100):
+x, y = 0, 0
+for i in range(0, 20):
     scanned_data = g2_lidar.read_data()
     submap = submapper.lidar_to_submap(scanned_data)
     global_mapper.update(submap)
-    global_mapper.update_observer_pos(Point(10 * i, 0))
+
+    rand_x, rand_y = random.randrange(-100, 100), random.randrange(-100, 100)
+    x = x + rand_x
+    y = y + rand_y
+    global_mapper.update_observer_pos(Point(x, y))
     visualize_occupancy_grid(global_mapper._occupancy_grid.content)
 
 plt.close()
 g2_lidar.disable()
 
-serialize(global_mapper._occupancy_grid.content)
-create_grayscale_bitmap(global_mapper._occupancy_grid.content)
+# serialize(global_mapper._occupancy_grid.content)
+# create_grayscale_bitmap(global_mapper._occupancy_grid.content)

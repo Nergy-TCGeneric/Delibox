@@ -86,7 +86,7 @@ class G2:
             with self._thread_lock:
                 self._scanned_queue.put(received)
 
-    def read_data(self) -> list[LaserScanPoint]:
+    def read_data(self) -> "list[LaserScanPoint]":
         return self._scanned_queue.get(timeout=1)
 
     def _parse_response(self):
