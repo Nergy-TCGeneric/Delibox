@@ -27,11 +27,11 @@ class Map:
     content: np.ndarray
 
     def __init__(self, dimension: "tuple[int, int]") -> None:
-        self.dimension = dimension
         x_width, y_width = dimension
 
         # By doing this way, one should access grid like grid[y][x].
         self.content = np.ones((y_width, x_width)) * UNCERTAIN
+        self.dimension = (self.content.shape[1], self.content.shape[0])
 
     def get_center_point(self) -> "tuple[int, int]":
         if self.dimension is None:
@@ -194,12 +194,15 @@ class GlobalMapper:
         self.observer_pos = new_pos
 
     def _try_resize_grid_by_submap(self, submap: Map) -> None:
-        resized = self._calculate_resized_bbox(submap)
+        bbox = self._calculate_resized_bbox(submap)
         width, height = self._occupancy_grid.dimension
 
-        if width < resized[0] or height < resized[1]:
-            self._update_offset(resized)
-            self._copy_and_resize_grid(resized)
+        new_width = bbox[1] - bbox[0]
+        new_height = bbox[3] - bbox[2]
+
+        if width < new_width or height < new_height:
+            self._update_offset(bbox)
+            self._copy_and_resize_grid(bbox)
 
     def _calculate_resized_bbox(self, submap: Map) -> "tuple[int, int, int, int]":
         # We need to convert these values into float, so that precise calculation is ensured
@@ -230,10 +233,25 @@ class GlobalMapper:
         new_grid_height = bbox[3] - bbox[2]
         width, height = self._occupancy_grid.dimension
 
-        # Conservative approach. Round toward 0 so that it doesn't hit the pad
+        offset_x, offset_y = 0, 0
+
+        print(f"Old grid dim : {width}, {height}")
+        print(f"New grid dim : {new_grid_width}, {new_grid_height}")
+
+        # Conservative approach. Round toward infinity so that it doesn't hit the pad
         # https://stackoverflow.com/questions/19919387/in-python-what-is-a-good-way-to-round-towards-zero-in-integer-division
-        offset_x = int((width - new_grid_width) / 2)
-        offset_y = int((height - new_grid_height) / 2)
+        # Expanding to left
+        if bbox[0] < 0:
+            offset_x = int((new_grid_width - width) / 2 + 0.5)
+        if bbox[2] < 0:
+            offset_y = int((new_grid_height - height) / 2 + 0.5)
+        if bbox[1] > width:
+            offset_x = int((width - new_grid_width) / 2 - 0.5)
+        if bbox[3] > height:
+            offset_y = int((height - new_grid_height) / 2 - 0.5)
+
+        print(f"Offset calculation: {offset_x}, {offset_y}")
+
         self._offset = (offset_x, offset_y)
 
     def _copy_and_resize_grid(self, bbox: "tuple[int, int, int, int]") -> None:
@@ -244,6 +262,8 @@ class GlobalMapper:
 
         new_grid = Map((new_grid_width, new_grid_height))
         width, height = self._occupancy_grid.dimension
+
+        print(f"Growing: ({bbox[0]}, {bbox[1] - width}, {bbox[2]}, {bbox[3] - height})")
 
         for y in range(height):
             for x in range(width):
@@ -257,17 +277,22 @@ class GlobalMapper:
         submap_width, submap_height = submap.dimension
         width, height = self._occupancy_grid.dimension
 
-        drawing_x = int(width / 2) + self.observer_pos.x
-        drawing_y = int(height / 2) + self.observer_pos.y
+        drawing_x = int(width / 2) + self.observer_pos.x + self._offset[0]
+        drawing_y = int(height / 2) + self.observer_pos.y + self._offset[1]
+
+        print(f"Initial drawing point: {drawing_x}, {drawing_y}")
 
         # Point adjustment
-        adjusted_x = drawing_x + self._offset[0] - int(submap_width / 2)
-        adjusted_y = drawing_y + self._offset[1] - int(submap_height / 2)
+        adjusted_x = drawing_x - int(submap_width / 2)
+        adjusted_y = drawing_y - int(submap_height / 2)
+
+        print(f"Adjusted drawing point: {adjusted_x}, {adjusted_y}")
+        print("")
 
         for y in range(submap_height):
             for x in range(submap_width):
-                g_y = adjusted_x + x
-                g_x = adjusted_y + y
+                g_y = adjusted_y + y
+                g_x = adjusted_x + x
 
                 # The g_y and g_x must be greater or equal to 0.
                 assert g_y >= 0
