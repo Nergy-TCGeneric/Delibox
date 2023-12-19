@@ -80,10 +80,10 @@ class Submapper:
         # https://stackoverflow.com/a/6085482
         # An adaptive approach to scale occupancy grid.
         # We add some immediates behind to 'pad' the map.
-        min_x = min(points, key=attrgetter("x")).x - 1
-        min_y = min(points, key=attrgetter("y")).y - 1
-        max_x = max(points, key=attrgetter("x")).x + 1
-        max_y = max(points, key=attrgetter("y")).y + 1
+        min_x = min(-self.resolution, min(points, key=attrgetter("x")).x - 1)
+        min_y = min(-self.resolution, min(points, key=attrgetter("y")).y - 1)
+        max_x = max(self.resolution, max(points, key=attrgetter("x")).x + 1)
+        max_y = max(self.resolution, max(points, key=attrgetter("y")).y + 1)
 
         x_width = max_x - min_x
         y_width = max_y - min_y
@@ -98,6 +98,11 @@ class Submapper:
             a_x = self._clamp(p.x + x_center, 0, x_center * 2 - 1)
             a_y = self._clamp(p.y + y_center, 0, y_center * 2 - 1)
             adjusted.append(Point(a_x, a_y))
+
+        # If points are too sparse so that unable to represent the rest of points,
+        # this attempts to fill with points with minimum distances.
+        while len(adjusted) < 700:
+            adjusted.append(Point(self.resolution, self.resolution))
 
         return adjusted
 
