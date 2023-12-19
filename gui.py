@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QObject, Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QPalette, QColor, QImage, QPixmap, QPainter
 
+import numpy as np
 from lidar import g2
 
 MM_TO_PX_RESOLUTION = 20
@@ -35,26 +36,34 @@ button_size = math.floor(
 
 
 class GridWorker(QThread):
-    finished = pyqtSignal()
+    finished = pyqtSignal(np.ndarray)
     _lidar: g2.G2
     _local_mapper: mapper.Submapper
     _global_mapper = mapper.GlobalMapper
+    _should_stop: bool = False
 
     def __init__(self, parent: QObject, port: str) -> None:
         super().__init__(parent)
         self._lidar = g2.G2(port)
         self._local_mapper = mapper.Submapper(MM_TO_PX_RESOLUTION)
-        self._global_mapper = mapper.GlobalMapper((50, 50))
+        self._global_mapper = mapper.GlobalMapper((250, 250))
         self._lidar.enable()
 
     def run(self) -> None:
-        scanned = self._lidar.read_data()
-        mapped = self._local_mapper.lidar_to_submap(scanned)
-        self._global_mapper.update(mapped)
-        self.finished.emit(self._global_mapper._occupancy_grid)
+        while not self._should_stop:
+            scanned = self._lidar.read_data()
+            mapped = self._local_mapper.lidar_to_submap(scanned)
+            self._global_mapper.update(mapped)
+            self.finished.emit(self._global_mapper._occupancy_grid.content)
 
     def update_observer_pos(self, pos: mapper.Point) -> None:
         self._global_mapper.update_observer_pos(pos)
+
+    def stop(self) -> None:
+        self._should_stop = True
+        self.wait()
+        self._lidar.disable()
+        self.terminate()
 
 
 class BodyControl(QWidget):
@@ -77,8 +86,10 @@ class BodyControl(QWidget):
 
         self._encoder_timer = QTimer(self)
         self._encoder_timer.setInterval(100)  # Check it for 100ms
-        self._grid_worker = GridWorker(self, "/dev/ttyUSB0")
+        self._encoder_timer.timeout.connect(self.update_observer_position)
+        self._grid_worker = GridWorker(self, "COM6")
         self._grid_worker.finished.connect(self.update_image)
+        self._grid_worker.start()
 
     def initUI(self):
         # layout setting
@@ -88,6 +99,8 @@ class BodyControl(QWidget):
         kill_layout.addStretch()
         pow_slider_layout = QVBoxLayout()
         self.image_scroll_layout = QScrollArea()
+
+        self.image_scroll_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         power_slider = QSlider(Qt.Orientation.Horizontal, self)
         power_slider.setRange(MIN_SPEED_DIAL, MAX_SPEED_DIAL)
@@ -130,6 +143,7 @@ class BodyControl(QWidget):
         kill_layout.setContentsMargins(
             button_size * 9, button_size, math.floor(button_size / 2), 0
         )
+        v_layout.addWidget(self.image_scroll_layout)
         v_layout.addLayout(kill_layout)
         v_layout.addLayout(pow_slider_layout)
         v_layout.addLayout(grid_layout)
@@ -159,14 +173,20 @@ class BodyControl(QWidget):
         if not self._encoder_timer.isActive():
             self._encoder_timer.start()
 
-    def update_image(self, map: mapper.Map):
-        # TODO: Won't work, this requires numpy array.
+    def update_image(self, content: np.ndarray):
         # Also see this : https://stackoverflow.com/questions/48639185/pyqt5-qimage-from-numpy-array
+        copied = content.copy()
+
+        # https://stackoverflow.com/a/41703413
+        height = content.shape[0]
+        total_bytes = copied.nbytes
+        bytes_per_line = int(total_bytes / height)
         image = QImage(
-            map.content,
-            map.content.shape[1],
-            map.content.shape[0],
-            QImage.Format.Format_Grayscale8,
+            copied.data,
+            copied.shape[0],
+            copied.shape[1],
+            bytes_per_line,
+            QImage.Format_Grayscale8,
         )
         self.imageLabel.setPixmap(QPixmap.fromImage(image))
         self.image_scroll_layout.setWidget(self.imageLabel)
@@ -194,6 +214,8 @@ class BodyControl(QWidget):
             self._encoder_timer.stop()
 
     def close(self):
+        self._grid_worker.stop()
+        self._encoder_timer.stop()
         QApplication.instance().quit()
 
     def slider_position(self, p):

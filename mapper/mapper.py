@@ -30,7 +30,7 @@ class Map:
         x_width, y_width = dimension
 
         # By doing this way, one should access grid like grid[y][x].
-        self.content = np.ones((y_width, x_width)) * UNCERTAIN
+        self.content = np.ones((y_width, x_width), dtype=np.uint8) * UNCERTAIN
         self.dimension = (self.content.shape[1], self.content.shape[0])
 
     def get_center_point(self) -> "tuple[int, int]":
@@ -247,13 +247,13 @@ class GlobalMapper:
         # https://stackoverflow.com/questions/19919387/in-python-what-is-a-good-way-to-round-towards-zero-in-integer-division
         # Expanding to left
         if bbox[0] < 0:
-            offset_x = int((new_grid_width - width) / 2 + 0.5)
+            offset_x = offset_x + int((new_grid_width - width) / 2 + 0.5)
         if bbox[2] < 0:
-            offset_y = int((new_grid_height - height) / 2 + 0.5)
+            offset_y = offset_y + int((new_grid_height - height) / 2 + 0.5)
         if bbox[1] > width:
-            offset_x = int((width - new_grid_width) / 2 - 0.5)
+            offset_x = offset_x + int((width - new_grid_width) / 2 - 0.5)
         if bbox[3] > height:
-            offset_y = int((height - new_grid_height) / 2 - 0.5)
+            offset_y = offset_y + int((height - new_grid_height) / 2 - 0.5)
 
         print(f"Offset calculation: {offset_x}, {offset_y}")
 
