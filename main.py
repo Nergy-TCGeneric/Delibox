@@ -1,3 +1,4 @@
+from matplotlib.animation import FuncAnimation
 import numpy as np
 from lidar import g2
 from mapper import mapper
@@ -22,6 +23,13 @@ def visualize_scan_points(scanned_data: List[g2.LaserScanPoint]):
 
     ax.scatter(radians, dist, s=0.1)
     plt.show()
+
+
+def update_visualizing_image(index):
+    scanned_data = g2_lidar.read_data()
+    submap = submapper.lidar_to_submap(scanned_data)
+    global_mapper.update(submap)
+    imshow.set_data(global_mapper._occupancy_grid.content)
 
 
 def visualize_occupancy_grid(grid: np.ndarray):
@@ -55,21 +63,18 @@ submapper = mapper.Submapper(18)
 global_mapper = mapper.GlobalMapper((250, 250))
 
 g2_lidar.enable()
-import random
+vis, ax = plt.subplots()
+initial_read = g2_lidar.read_data()
+initial_grid = submapper.lidar_to_submap(initial_read)
+global_mapper.update(initial_grid)
 
-x, y = 0, 0
-for i in range(0, 20):
-    scanned_data = g2_lidar.read_data()
-    submap = submapper.lidar_to_submap(scanned_data)
-    global_mapper.update(submap)
+anim = FuncAnimation(vis, update_visualizing_image, frames=10, interval=16)
 
-    rand_x, rand_y = random.randrange(-100, 100), random.randrange(-100, 100)
-    x = x + rand_x
-    y = y + rand_y
-    global_mapper.update_observer_pos(Point(x, y))
-    visualize_occupancy_grid(global_mapper._occupancy_grid.content)
+imshow = ax.imshow(
+    global_mapper._occupancy_grid.content, cmap="binary", vmin=0, vmax=255
+)
 
-plt.close()
+plt.show()
 g2_lidar.disable()
 
 # serialize(global_mapper._occupancy_grid.content)
