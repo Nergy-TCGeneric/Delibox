@@ -178,23 +178,27 @@ class Submapper:
 class GlobalMapper:
     _occupancy_grid: Map
     observer_pos: Point
+    _offset: tuple[int, int]
 
     def __init__(self, initial_dimension: "tuple[int, int]") -> None:
         self._occupancy_grid = Map(initial_dimension)
         # We set observer's position to (0, 0), the center of the grid.
         self.observer_pos = Point(0, 0)
+        self._offset = (0, 0)
 
     def update(self, submap: Map) -> None:
-        resized = self._calculate_resized_shape(submap)
-        offset = self._get_offset(resized)
-        if offset[0] > 0 or offset[1] > 0:
-            self._resize_grid(resized)
-        self._update_occupancy_grid(submap, offset)
+        resized = self._calculate_resized_bbox(submap)
+        width, height = self._occupancy_grid.dimension
+
+        if width < resized[0] or height < resized[1]:
+            self._update_offset(resized)
+            self._copy_and_resize_grid(resized)
+        self._update_occupancy_grid(submap)
 
     def update_observer_pos(self, new_pos: Point) -> None:
         self.observer_pos = new_pos
 
-    def _calculate_resized_shape(self, submap: Map) -> "tuple[int, int]":
+    def _calculate_resized_bbox(self, submap: Map) -> "tuple[int, int, int, int]":
         # We need to convert these values into float, so that precise calculation is ensured
         submap_width, submap_height = map(float, submap.dimension)
         grid_width, grid_height = self._occupancy_grid.dimension
@@ -216,43 +220,51 @@ class GlobalMapper:
         grid_min_y = min(0, min_y)
         grid_max_y = max(grid_height, max_y)
 
-        new_grid_width = grid_max_x - grid_min_x
-        new_grid_height = grid_max_y - grid_min_y
+        return (grid_min_x, grid_max_x, grid_min_y, grid_max_y)
 
-        return (new_grid_width, new_grid_height)
-
-    def _get_offset(self, new_dim: "tuple[int, int]") -> "tuple[int, int]":
+    def _update_offset(self, bbox: "tuple[int, int, int, int]") -> None:
+        new_grid_width = bbox[1] - bbox[0]
+        new_grid_height = bbox[3] - bbox[2]
         width, height = self._occupancy_grid.dimension
-        return (new_dim[0] - width, new_dim[1] - height)
 
-    def _resize_grid(self, new_dim: "tuple[int, int]") -> None:
-        new_grid = Map(new_dim)
+        # Conservative approach. Round toward 0 so that it doesn't hit the pad
+        # https://stackoverflow.com/questions/19919387/in-python-what-is-a-good-way-to-round-towards-zero-in-integer-division
+        offset_x = int((width - new_grid_width) / 2)
+        offset_y = int((height - new_grid_height) / 2)
+        self._offset = (offset_x, offset_y)
+
+    def _copy_and_resize_grid(self, bbox: "tuple[int, int, int, int]") -> None:
+        new_grid_width = bbox[1] - bbox[0]
+        new_grid_height = bbox[3] - bbox[2]
+        patch_offset_x = abs(bbox[0])
+        patch_offset_y = abs(bbox[2])
+
+        new_grid = Map((new_grid_width, new_grid_height))
         width, height = self._occupancy_grid.dimension
-        offset = self._get_offset(new_dim)
 
         for y in range(height):
             for x in range(width):
-                new_x = x + offset[0]
-                new_y = y + offset[1]
+                new_x = x + patch_offset_x
+                new_y = y + patch_offset_y
                 new_grid.content[new_y, new_x] = self._occupancy_grid.content[y, x]
 
         self._occupancy_grid = new_grid
 
-    def _update_occupancy_grid(self, submap: Map, offset: "tuple[int, int]") -> None:
+    def _update_occupancy_grid(self, submap: Map) -> None:
         submap_width, submap_height = submap.dimension
-        grid_width, grid_height = self._occupancy_grid.dimension
+        width, height = self._occupancy_grid.dimension
 
-        # We need to subtract the offset, because it's one from before resizing
-        # TODO: Why should we need to do these thing? I don't get it.
-        grid_x = int((grid_width - offset[0]) / 2) + self.observer_pos.x
-        grid_y = int((grid_height - offset[1]) / 2) + self.observer_pos.y
+        drawing_x = int(width / 2) + self.observer_pos.x
+        drawing_y = int(height / 2) + self.observer_pos.y
+
+        # Point adjustment
+        adjusted_x = drawing_x + self._offset[0] - int(submap_width / 2)
+        adjusted_y = drawing_y + self._offset[1] - int(submap_height / 2)
 
         for y in range(submap_height):
             for x in range(submap_width):
-                submap_x = x - int(submap_width / 2)
-                submap_y = y - int(submap_height / 2)
-                g_y = grid_y + submap_y
-                g_x = grid_x + submap_x
+                g_y = adjusted_x + x
+                g_x = adjusted_y + y
 
                 # The g_y and g_x must be greater or equal to 0.
                 assert g_y >= 0
