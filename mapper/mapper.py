@@ -187,16 +187,19 @@ class GlobalMapper:
         self._offset = (0, 0)
 
     def update(self, submap: Map) -> None:
+        self._try_resize_grid_by_submap(submap)
+        self._update_occupancy_grid(submap)
+
+    def update_observer_pos(self, new_pos: Point) -> None:
+        self.observer_pos = new_pos
+
+    def _try_resize_grid_by_submap(self, submap: Map) -> None:
         resized = self._calculate_resized_bbox(submap)
         width, height = self._occupancy_grid.dimension
 
         if width < resized[0] or height < resized[1]:
             self._update_offset(resized)
             self._copy_and_resize_grid(resized)
-        self._update_occupancy_grid(submap)
-
-    def update_observer_pos(self, new_pos: Point) -> None:
-        self.observer_pos = new_pos
 
     def _calculate_resized_bbox(self, submap: Map) -> "tuple[int, int, int, int]":
         # We need to convert these values into float, so that precise calculation is ensured
