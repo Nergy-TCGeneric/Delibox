@@ -56,6 +56,7 @@ FREE: Final[int] = 0
 
 # Constants.
 DISTANCE_THRESHOLD = 16000 / 40
+IQR_THRESHOLD = 1.5
 
 
 class Submapper:
@@ -82,17 +83,19 @@ class Submapper:
     def _remove_adjacent_outliers(self, point: List[g2.LaserScanPoint]) -> None:
         point_dist = [p.distance for p in point]
         distances = np.array(point_dist, dtype=np.uint32)
-        distance_diff = np.diff(distances, axis=0)
-        outlier_mask = np.abs(distance_diff) > DISTANCE_THRESHOLD
 
-        # Calculate the last distance, by using first and last point.
-        last_dist = (distances[0] - distances[-1]) > DISTANCE_THRESHOLD
-        outlier_mask = np.append(outlier_mask, last_dist)
+        q1 = np.percentile(distances, 25)
+        q3 = np.percentile(distances, 75)
+        iqr = q3 - q1
+
+        lower_threshold = q1 - IQR_THRESHOLD * iqr
+        upper_threshold = q3 + IQR_THRESHOLD * iqr
+        is_outlier = (distances < lower_threshold) | (distances > upper_threshold)
 
         # Replace outliers with median.
         median = distances.mean()
         for i in range(len(distances)):
-            if outlier_mask[i]:
+            if is_outlier[i]:
                 point[i].distance = median
 
     def _setup_submap(self, points: List[Point]) -> Map:
