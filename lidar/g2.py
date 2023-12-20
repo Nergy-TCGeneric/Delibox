@@ -22,6 +22,9 @@ START_DATA: Final[int] = 1
 MIN_RANGE: Final[int] = 120
 MAX_RANGE: Final[int] = 16000
 
+# G2 Frequency constant. (in Hz)
+FREQUENCY: Final[int] = 7
+
 
 @dataclass
 class LaserScanPoint:
@@ -124,6 +127,11 @@ class G2:
             header = self._parse_scan_header_fields()
             parsed_points = self._parse_scan_samples(header)
             scanned_points.extend(parsed_points)
+
+            # Whenever G2 sends a malformed data, the scanned_points just overpacked(about 7000 points).
+            # This is actually a hack, and should be removed in future
+            if len(scanned_points) > FREQUENCY * 100:
+                break
 
             if not is_first_header and header.packet_type == START_DATA:
                 break
