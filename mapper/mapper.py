@@ -92,11 +92,31 @@ class Submapper:
         upper_threshold = q3 + IQR_THRESHOLD * iqr
         is_outlier = (distances < lower_threshold) | (distances > upper_threshold)
 
-        # Replace outliers with median.
-        median = distances.mean()
+        # Replace outliers with valid adjacent values.
         for i in range(len(distances)):
             if is_outlier[i]:
-                point[i].distance = median
+                left, right = self._get_valid_adjacent_values(is_outlier, i)
+                left_dist = point_dist[left]
+                right_dist = point_dist[right]
+                point[i].distance = (left_dist + right_dist) // 2
+
+    def _get_valid_adjacent_values(
+        self, is_outlier: "np.ndarray", index: int
+    ) -> "tuple[int, int]":
+        left_index = index
+        right_index = index
+
+        while left_index > 0:
+            if is_outlier[left_index] == False:
+                break
+            left_index = left_index - 1
+
+        while right_index < len(is_outlier):
+            if is_outlier[right_index] == False:
+                break
+            right_index = right_index + 1
+
+        return (left_index, right_index)
 
     def _setup_submap(self, points: List[Point]) -> Map:
         # https://stackoverflow.com/a/6085482
