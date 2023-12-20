@@ -1,4 +1,3 @@
-from cgi import print_form
 from collections import deque
 from operator import attrgetter
 from mapper import bresenham
@@ -55,6 +54,9 @@ OCCUPIED: Final[int] = 255
 UNCERTAIN: Final[int] = 128
 FREE: Final[int] = 0
 
+# Constants.
+DISTANCE_THRESHOLD = 16000 / 40
+
 
 class Submapper:
     resolution: int
@@ -65,6 +67,7 @@ class Submapper:
         self.resolution = resolution
 
     def lidar_to_submap(self, points: List[g2.LaserScanPoint]) -> Map:
+        self._remove_adjacent_outliers(points)
         rasterized = self._rasterize_points(points)
         submap = self._setup_submap(rasterized)
         adjusted = self._adjust_points(submap, rasterized)
@@ -75,6 +78,22 @@ class Submapper:
         self._emphasize_walls(submap, adjusted)
 
         return submap
+
+    def _remove_adjacent_outliers(self, point: List[g2.LaserScanPoint]) -> None:
+        point_dist = [p.distance for p in point]
+        distances = np.array(point_dist, dtype=np.uint32)
+        distance_diff = np.diff(distances, axis=0)
+        outlier_mask = np.abs(distance_diff) > DISTANCE_THRESHOLD
+
+        # Calculate the last distance, by using first and last point.
+        last_dist = (distances[0] - distances[-1]) > DISTANCE_THRESHOLD
+        outlier_mask = np.append(outlier_mask, last_dist)
+
+        # Replace outliers with median.
+        median = distances.mean()
+        for i in range(len(distances)):
+            if outlier_mask[i]:
+                point[i].distance = median
 
     def _setup_submap(self, points: List[Point]) -> Map:
         # https://stackoverflow.com/a/6085482
