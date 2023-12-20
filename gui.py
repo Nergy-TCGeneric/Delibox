@@ -3,6 +3,7 @@
 
 import math
 import sys
+from queue import Queue
 from pose import motor_control
 from mapper import mapper
 
@@ -41,12 +42,14 @@ class GridWorker(QThread):
     _local_mapper: mapper.Submapper
     _global_mapper = mapper.GlobalMapper
     _should_stop: bool = False
+    _next_pos: "Queue[mapper.Point]"
 
     def __init__(self, parent: QObject, port: str) -> None:
         super().__init__(parent)
         self._lidar = g2.G2(port)
         self._local_mapper = mapper.Submapper(MM_TO_PX_RESOLUTION)
         self._global_mapper = mapper.GlobalMapper((250, 250))
+        self._next_pos = Queue(maxsize=20)
         self._lidar.enable()
 
     def run(self) -> None:
@@ -54,10 +57,14 @@ class GridWorker(QThread):
             scanned = self._lidar.read_data()
             mapped = self._local_mapper.lidar_to_submap(scanned)
             self._global_mapper.update(mapped)
+
+            if not self._next_pos.empty():
+                next_position = self._next_pos.get()
+                self._global_mapper.update_observer_pos(next_position)
             self.finished.emit(self._global_mapper._occupancy_grid.content)
 
-    def update_observer_pos(self, pos: mapper.Point) -> None:
-        self._global_mapper.update_observer_pos(pos)
+    def update_next_observer_pos(self, pos: mapper.Point) -> None:
+        self._next_pos.put(pos)
 
     def stop(self) -> None:
         self._should_stop = True
