@@ -225,7 +225,7 @@ class Submapper:
 class GlobalMapper:
     _occupancy_grid: Map
     observer_pos: Point
-    _offset: tuple[int, int]
+    _offset: "tuple[int, int]"
 
     def __init__(self, initial_dimension: "tuple[int, int]") -> None:
         self._occupancy_grid = Map(initial_dimension)
